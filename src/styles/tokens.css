@@ -1,0 +1,74 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+ * GCO Partners — design tokens
+ * Single source of truth for the house style. Consumed by tailwind.config.js as
+ * semantic classes (bg-surface-card, text-ink, border-subtle, ...). Do not
+ * hardcode hex in components — reach for the semantic class instead.
+ * Light theme only. Warm neutrals throughout — never pure black, never cool grays.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* ── Brand ramps ── */
+  --accent-primary: #9c7804;        /* gold-olive — primary action / brand */
+  --accent-primary-hover: #6f5a22;  /* darkens, never lightens */
+  --accent-secondary: #12898d;      /* teal — secondary accent / links */
+  --accent-alert: #c14904;          /* rust — alert / destructive */
+  --accent-alert-hover: #a34518;
+
+  /* ── Surfaces (warm) ── */
+  --surface-page: #f2f2f2;          /* warm fog — the page is never stark white */
+  --surface-card: #ffffff;
+  --surface-cream: #f9f4e7;         /* highlight blocks, active nav, row hover */
+  --surface-sunken: #edecea;        /* table headers, wells */
+  --surface-report: #faf7f1;        /* report / upload surfaces */
+
+  /* ── Text (warm near-black, never #000) ── */
+  --text-primary: #251c1a;
+  --text-secondary: #5c5250;
+  --text-tertiary: #6f6a62;
+
+  /* ── Borders ── */
+  --border-subtle: #e0ddd9;         /* hairline */
+  --border-default: #b6b3b2;        /* stronger */
+
+  /* ── Fixed data semantics (do NOT re-map per screen) ── */
+  --data-favorable: #12898d;        /* teal  — favorable / on-track / healthy */
+  --data-favorable-tint: #e1efee;
+  --data-unfavorable: #c0531d;      /* rust  — unfavorable / risk / overdue / failed */
+  --data-unfavorable-tint: #f7e6db;
+  --data-watch: #9c7d33;            /* gold  — watch / pending / needs review */
+  --data-watch-tint: #f3ecd9;
+  --data-neutral: #6f6a62;          /* warm gray — neutral / no data */
+  --data-neutral-tint: #edecea;
+
+  /* ── Chart series (in order; aggregate beyond six) ── */
+  --chart-1: #12898d;
+  --chart-2: #9c7804;
+  --chart-3: #c1502e;
+  --chart-4: #6f5a22;
+  --chart-5: #52b0b3;
+  --chart-6: #c9a769;
+
+  /* ── Radii ── */
+  --radius-input: 8px;
+  --radius-card: 12px;
+  --radius-panel: 20px;
+  --radius-pill: 9999px;
+
+  /* ── Warm-tinted shadows (based on rgba(37,28,26,·)) — never cool, never a glow ── */
+  --shadow-sm: 0 1px 2px rgba(37, 28, 26, 0.06);
+  --shadow-md: 0 8px 24px rgba(37, 28, 26, 0.08);
+  --shadow-lg: 0 16px 48px rgba(37, 28, 26, 0.12);
+
+  /* ── Scrim (warm, not blur) ── */
+  --scrim: rgba(37, 28, 26, 0.4);
+
+  /* ── Motion ── */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-fast: 120ms;   /* hover / press */
+  --motion-slow: 200ms;   /* panels / disclosure */
+
+  /* ── Focus ── */
+  --focus-ring: var(--accent-secondary);
+
+  color-scheme: light;
+}

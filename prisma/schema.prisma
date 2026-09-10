@@ -1,0 +1,606 @@
+// GCO Partners Platform — data model
+//
+// Multi-tenancy rule: every tenant-scoped table carries `orgId` (the tenant
+// boundary). ALL reads/writes of these tables must filter by orgId — enforced in
+// the data-access layer (src/lib/tenant.ts), never only in the UI. A user in one
+// org must never be able to read another org's data.
+//
+// Audit rule: audit_log is append-only. The app writes rows and never updates or
+// deletes them (enforce with a DB trigger / restricted role in production).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Platform role. A user has one global role plus per-org membership roles.
+enum Role {
+  client
+  accountant
+  broker
+  gco_staff
+  admin
+}
+
+/// Tenant type. The Org is the isolation boundary.
+enum OrgType {
+  practice // a client practice (dental, medical, etc.)
+  firm     // an accounting firm
+  broker   // a brokerage / deal org
+  gco      // GCO Partners internal
+}
+
+enum EngagementStatus {
+  onboarding
+  active
+  paused
+  closed
+}
+
+enum DealStage {
+  sourcing
+  diligence
+  loi
+  closing
+  closed
+  dead
+}
+
+enum ConnectionProvider {
+  quickbooks
+  xero
+  plaid
+}
+
+/// Connection health — surfaced with a label + glyph, never color alone.
+enum ConnectionStatus {
+  connected
+  needs_reauth
+  disconnected
+}
+
+enum InvoiceStatus {
+  draft
+  sent
+  paid
+  overdue
+  void
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+}
+
+enum DocumentStatus {
+  received
+  reconciled
+  pending_review
+  missing
+  rejected
+}
+
+/// Sensitive actions recorded in the append-only audit log.
+enum AuditAction {
+  login
+  logout
+  login_failed
+  permission_change
+  member_invited
+  member_removed
+  payment_initiated
+  payment_succeeded
+  payment_failed
+  document_access
+  document_upload
+  system_link_connected
+  system_link_revoked
+  impersonation_start
+  impersonation_end
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenancy & identity
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Org == tenant. The isolation boundary for all scoped data.
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  type      OrgType
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  memberships Membership[]
+  practices   Practice[]
+  deals       Deal[]
+  engagements Engagement[]
+  connections Connection[]
+  invoices    Invoice[]
+  payments    Payment[]
+  threads     Thread[]
+  documents   Document[]
+  auditLogs   AuditLog[]
+
+  @@map("orgs")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  /// Set only for password (credentials) sign-in. OAuth users have this null.
+  passwordHash  String?
+  /// Global platform role. Org-scoped roles live on Membership.
+  role          Role      @default(client)
+  emailVerified DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  memberships      Membership[]
+  accounts         Account[]
+  sessions         Session[]
+  uploadedDocs     Document[] @relation("DocumentUploader")
+  sentMessages     Message[]  @relation("MessageSender")
+  auditLogs        AuditLog[] @relation("AuditActor")
+
+  @@map("users")
+}
+
+/// Links a user to an org with an org-scoped role. Drives the context switcher:
+/// a user's memberships are the entities they can switch between.
+model Membership {
+  id        String   @id @default(cuid())
+  userId    String
+  orgId     String
+  role      Role
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+  @@map("memberships")
+}
+
+// ── Auth.js adapter models ───────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tenant-scoped entities (all carry orgId)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A client practice (the accounting-side subject).
+model Practice {
+  id         String   @id @default(cuid())
+  orgId      String
+  name       String
+  entityType String? // e.g. "Dental PC", "LLC"
+  externalId String? // id in the linked accounting system
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagements Engagement[]
+  invoices    Invoice[]
+  threads     Thread[]
+
+  @@index([orgId])
+  @@map("practices")
+}
+
+/// A broker-side deal / diligence subject.
+model Deal {
+  id         String    @id @default(cuid())
+  orgId      String
+  name       String
+  targetName String?
+  stage      DealStage @default(sourcing)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  engagements Engagement[]
+  threads     Thread[]
+
+  @@index([orgId])
+  @@map("deals")
+}
+
+/// A unit of work GCO runs for a practice or deal.
+model Engagement {
+  id         String           @id @default(cuid())
+  orgId      String
+  practiceId String?
+  dealId     String?
+  name       String
+  status     EngagementStatus @default(onboarding)
+  startedAt  DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  org      Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  practice Practice? @relation(fields: [practiceId], references: [id])
+  deal     Deal?     @relation(fields: [dealId], references: [id])
+  invoices Invoice[]
+  threads  Thread[]
+
+  @@index([orgId])
+  @@map("engagements")
+}
+
+/// Accounting / banking system link. Stores ONLY provider tokens + metadata.
+/// NEVER stores a third party's login credentials.
+model Connection {
+  id         String             @id @default(cuid())
+  orgId      String
+  provider   ConnectionProvider
+  status     ConnectionStatus   @default(disconnected)
+  /// Provider-side account/realm id (e.g. QBO realmId, Plaid item_id).
+  externalId String?
+  /// Reference/pointer into a secrets vault for the OAuth token — NOT the token
+  /// itself in plaintext, and NEVER the user's provider password.
+  tokenRef   String?
+  /// Non-secret connection metadata (institution name, scopes, expiry).
+  metadata   Json?
+  lastSyncAt DateTime?
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, provider])
+  @@index([orgId])
+  @@map("connections")
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  orgId        String
+  number       String
+  practiceId   String?
+  engagementId String?
+  amountCents  Int
+  currency     String        @default("usd")
+  status       InvoiceStatus @default(draft)
+  issueDate    DateTime      @default(now())
+  dueDate      DateTime?
+  /// Optional analytics dimensions (dental group): which location the invoice
+  /// belongs to and the responsible patient/payer, for AR-aging breakdowns.
+  locationId   String?
+  payer        String?
+  patient      String?
+  /// Stripe reference only — no card/bank data ever stored here.
+  stripeInvoiceId String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  org        Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  practice   Practice?   @relation(fields: [practiceId], references: [id])
+  engagement Engagement? @relation(fields: [engagementId], references: [id])
+  payments   Payment[]
+
+  @@unique([orgId, number])
+  @@index([orgId])
+  @@index([orgId, status])
+  @@map("invoices")
+}
+
+/// A payment attempt. Stores ONLY Stripe references — never PAN / bank numbers.
+model Payment {
+  id                    String        @id @default(cuid())
+  orgId                 String
+  invoiceId             String
+  amountCents           Int
+  currency              String        @default("usd")
+  status                PaymentStatus @default(pending)
+  stripeCustomerId      String?
+  stripePaymentIntentId String?
+  stripeCheckoutSessionId String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  org     Org     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model Thread {
+  id           String   @id @default(cuid())
+  orgId        String
+  subject      String
+  practiceId   String?
+  dealId       String?
+  engagementId String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  org        Org         @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  practice   Practice?   @relation(fields: [practiceId], references: [id])
+  deal       Deal?       @relation(fields: [dealId], references: [id])
+  engagement Engagement? @relation(fields: [engagementId], references: [id])
+  messages   Message[]
+
+  @@index([orgId])
+  @@map("threads")
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  threadId   String
+  senderId   String
+  senderRole Role
+  body       String    @db.Text
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  thread Thread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender User   @relation("MessageSender", fields: [senderId], references: [id])
+
+  @@index([threadId])
+  @@map("messages")
+}
+
+model Document {
+  id           String         @id @default(cuid())
+  orgId        String
+  name         String
+  type         String? // e.g. "Bank statement", "P&L"
+  period       String? // e.g. "2026-03"
+  uploadedById String
+  status       DocumentStatus @default(pending_review)
+  /// Object-store key. Access is always via authenticated, signed, short-lived
+  /// URLs generated server-side — never a public/unauthenticated preview URL.
+  storageKey   String
+  sizeBytes    Int
+  mimeType     String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  org        Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("DocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([orgId])
+  @@index([orgId, status])
+  @@map("documents")
+}
+
+/// Append-only audit trail. Who did what, when. Never updated or deleted.
+/// orgId is nullable for platform-level events (e.g. login before a context is
+/// chosen).
+model AuditLog {
+  id         String      @id @default(cuid())
+  orgId      String?
+  actorId    String?
+  action     AuditAction
+  /// Human-readable target label (e.g. "Invoice INV-1042", "member jane@..").
+  target     String?
+  targetId   String?
+  ip         String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+
+  org   Org?  @relation(fields: [orgId], references: [id])
+  actor User? @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([orgId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_log")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Analytics view layer (CFO dashboard)
+//
+// These model the shape the linked accounting systems (QuickBooks / Xero) will
+// feed. All are tenant-scoped by `orgId` and most are location-scoped. The CFO
+// dashboard currently reads Location/Provider from here and generates the
+// numeric metrics from a deterministic mock layer (src/lib/analytics) — the
+// snapshot tables below are the persistence target once real feeds land.
+//
+// TODO(feeds): populate cashflow_entries / ar_aging_snapshots / location_metrics
+// / pnl_lines / provider_production / transactions from the accounting-system
+// sync jobs, keyed by (orgId, locationId, period).
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ArBucket {
+  current
+  d1_30
+  d31_60
+  d61_90
+  d90_plus
+}
+
+/// A physical location within a dental group (the tenant org).
+model Location {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  metrics    LocationMetric[]
+  cashflow   CashflowEntry[]
+  arSnaps    ArAgingSnapshot[]
+  txns       Transaction[]
+
+  @@index([orgId])
+  @@map("locations")
+}
+
+/// A treating provider (dentist / hygienist) for production reporting.
+model Provider {
+  id        String   @id @default(cuid())
+  orgId     String
+  name      String
+  specialty String?
+  createdAt DateTime @default(now())
+
+  production ProviderProduction[]
+  txns       Transaction[]
+
+  @@index([orgId])
+  @@map("providers")
+}
+
+model CashflowEntry {
+  id           String   @id @default(cuid())
+  orgId        String
+  locationId   String?
+  period       String // 'YYYY-MM'
+  bucketDate   DateTime
+  cashInCents  Int
+  cashOutCents Int
+  cashOnHandCents Int
+  budgetNetCents  Int?
+  createdAt    DateTime @default(now())
+
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@index([orgId, period])
+  @@map("cashflow_entries")
+}
+
+model ArAgingSnapshot {
+  id          String   @id @default(cuid())
+  orgId       String
+  locationId  String?
+  payer       String?
+  period      String
+  bucket      ArBucket
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  location Location? @relation(fields: [locationId], references: [id])
+
+  @@index([orgId, period])
+  @@map("ar_aging_snapshots")
+}
+
+model LocationMetric {
+  id                 String   @id @default(cuid())
+  orgId              String
+  locationId         String
+  period             String
+  revenueCents       Int
+  productionCents    Int
+  collectionsCents   Int
+  arCents            Int
+  budgetRevenueCents Int
+  createdAt          DateTime @default(now())
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  @@unique([locationId, period])
+  @@index([orgId, period])
+  @@map("location_metrics")
+}
+
+model PnlLine {
+  id          String   @id @default(cuid())
+  orgId       String
+  period      String
+  account     String
+  category    String // 'revenue' | 'cogs' | 'opex' | 'other'
+  actualCents Int
+  budgetCents Int
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([orgId, period])
+  @@map("pnl_lines")
+}
+
+model ProviderProduction {
+  id               String   @id @default(cuid())
+  orgId            String
+  providerId       String
+  period           String
+  productionCents  Int
+  collectionsCents Int
+  adjustmentsCents Int
+  createdAt        DateTime @default(now())
+
+  provider Provider @relation(fields: [providerId], references: [id])
+
+  @@unique([providerId, period])
+  @@index([orgId, period])
+  @@map("provider_production")
+}
+
+/// Ledger-level detail that P&L / production drills resolve to.
+model Transaction {
+  id          String   @id @default(cuid())
+  orgId       String
+  locationId  String?
+  providerId  String?
+  date        DateTime
+  description String
+  account     String?
+  amountCents Int
+  createdAt   DateTime @default(now())
+
+  location Location? @relation(fields: [locationId], references: [id])
+  provider Provider? @relation(fields: [providerId], references: [id])
+
+  @@index([orgId, date])
+  @@map("transactions")
+}
