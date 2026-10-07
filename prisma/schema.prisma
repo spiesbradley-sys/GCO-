@@ -604,3 +604,315 @@ model Transaction {
   @@index([orgId, date])
   @@map("transactions")
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+// GCO SERVICE DESK (internal, employees only)
+//
+// Completely isolated from the client-facing platform above. Desk users are a
+// SEPARATE identity (DeskUser) with their own DB-backed sessions — a client's
+// Auth.js cookie grants zero desk access and vice-versa. All desk tables are
+// prefixed `desk_`. Money is stored in integer CENTS; dates as 'YYYY-MM-DD'
+// strings (mirrors the reference). Computed values (margin, rack rate, business
+// days, blocker counts) are NEVER stored — see src/desk/compute.ts.
+// ═════════════════════════════════════════════════════════════════════════════
+
+enum DeskRole {
+  owner
+  management
+  controller
+  accountant
+}
+
+/// A GCO employee with desk access. Isolated from the client `User` table.
+model DeskUser {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String?
+  /// Null until the invite is accepted and a password is set.
+  passwordHash      String?
+  role              DeskRole  @default(accountant)
+  isActive          Boolean   @default(true)
+  invitedByEmail    String?
+  lastLoginAt       DateTime?
+  /// Sessions created before this are invalid (logout-everywhere on pw change).
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  sessions DeskSession[]
+
+  @@map("desk_users")
+}
+
+/// DB-backed session — revocable, so idle timeout + logout-everywhere work.
+model DeskSession {
+  id         String    @id @default(cuid())
+  userId     String
+  /// SHA-256 of the opaque session token (the raw token lives only in the cookie).
+  tokenHash  String    @unique
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user DeskUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("desk_sessions")
+}
+
+/// Single-use, signed invite. Only the owner creates these.
+model DeskInvite {
+  id             String    @id @default(cuid())
+  email          String
+  role           DeskRole
+  tokenHash      String    @unique
+  invitedByEmail String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([email])
+  @@map("desk_invites")
+}
+
+/// Single-use password reset token (1h expiry).
+model DeskPasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("desk_password_resets")
+}
+
+/// Append-only audit trail for the desk. Owner-viewable.
+model DeskAuditLog {
+  id         String   @id @default(cuid())
+  at         DateTime @default(now())
+  actorId    String?
+  actorEmail String?
+  action     String
+  board      String?
+  recordId   String?
+  summary    String?
+  diff       Json?
+  ip         String?
+
+  @@index([at])
+  @@index([board, recordId])
+  @@map("desk_audit_log")
+}
+
+// ── Boards (field key == column name; see src/desk/boards.ts for the config) ──
+
+model DeskIntake {
+  id         String   @id @default(cuid())
+  name       String   @default("Untitled")
+  email      String?
+  accounting String[] @default([])
+  payments   String[] @default([])
+  access     String?
+  goodMonth  String?
+  structure  String?
+  clarity    String?
+  buyJourney String?
+  monday     String?
+  firstWin   String?
+  tools      String?
+  extra      String?
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?
+
+  client DeskClient? @relation("ClientIntake")
+
+  @@map("desk_intake")
+}
+
+model DeskClient {
+  id          String   @id @default(cuid())
+  name        String   @default("Untitled")
+  status      String?
+  legal       String?
+  location    String?
+  contact     String?
+  email       String?
+  onboarding  String?
+  access      String?
+  system      String?
+  bank        String?
+  letter      Boolean  @default(false)
+  fee         Int? // cents
+  start       String? // YYYY-MM-DD
+  streams     String[] @default([])
+  intake      String?  @unique // FK -> DeskIntake.id (1:1)
+  notes       String?
+  /// Optional link to a client-portal Org (integration hook). Never exposes the
+  /// desk to clients; purely a reference the desk can resolve.
+  portalOrgId String?
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  intakeRecord DeskIntake?      @relation("ClientIntake", fields: [intake], references: [id])
+  engagements  DeskEngagement[]
+
+  @@map("desk_clients")
+}
+
+model DeskEngagement {
+  id          String   @id @default(cuid())
+  name        String   @default("Untitled")
+  client      String? // FK -> DeskClient.id
+  service     String?
+  status      String?
+  fee         Int?
+  slaDelivery Int?
+  slaMeeting  Int?
+  slaQuery    Int?
+  controller  String? // DeskUser.id
+  bookkeeper  String? // DeskUser.id
+  start       String?
+  pilotEnd    String?
+  scope       String?
+  exclusions  String?
+  createdAt   DateTime @default(now())
+  createdBy   String?
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+
+  clientRecord DeskClient? @relation(fields: [client], references: [id])
+  cycles       DeskCycle[]
+
+  @@map("desk_engagements")
+}
+
+model DeskCycle {
+  id         String   @id @default(cuid())
+  name       String   @default("Untitled")
+  engagement String? // FK -> DeskEngagement.id
+  period     String?
+  stage      String?
+  capture    Boolean  @default(false)
+  bkReview   Boolean  @default(false)
+  ctrlReview Boolean  @default(false)
+  slaDue     String?
+  slaStatus  String?
+  delivered  String?
+  meeting    String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?
+
+  engagementRecord DeskEngagement?   @relation(fields: [engagement], references: [id])
+  queries          DeskQuery[]
+  deliverables     DeskDeliverable[]
+
+  @@map("desk_cycles")
+}
+
+model DeskQuery {
+  id        String   @id @default(cuid())
+  name      String   @default("Untitled")
+  cycle     String? // FK -> DeskCycle.id
+  type      String?
+  status    String?
+  blocks    Boolean  @default(false)
+  raised    String?
+  responded String?
+  resolved  String?
+  owner     String? // DeskUser.id
+  details   String?
+  createdAt DateTime @default(now())
+  createdBy String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  cycleRecord DeskCycle? @relation(fields: [cycle], references: [id])
+
+  @@map("desk_queries")
+}
+
+model DeskDeliverable {
+  id        String   @id @default(cuid())
+  name      String   @default("Untitled")
+  cycle     String? // FK -> DeskCycle.id
+  type      String?
+  delivered String?
+  qc        String? // DeskUser.id
+  file      String?
+  notes     String?
+  createdAt DateTime @default(now())
+  createdBy String?
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  cycleRecord DeskCycle? @relation(fields: [cycle], references: [id])
+
+  @@map("desk_deliverables")
+}
+
+model DeskDeal {
+  id           String   @id @default(cuid())
+  name         String   @default("Untitled")
+  stage        String?
+  source       String?
+  broker       String?
+  posture      String?
+  locations    Int?
+  fee          Int?
+  payment      String?
+  review       String?
+  owner        String? // DeskUser.id
+  reviewer     String? // DeskUser.id
+  entity       String?
+  state        String?
+  pms          String?
+  periods      String?
+  created      String?
+  dataReceived String?
+  finalized    String?
+  outstandings String?
+  learnings    String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  createdBy    String?
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
+
+  @@map("desk_deals")
+}
+
+model DeskPnlRow {
+  id         String   @id @default(cuid())
+  name       String   @default("Untitled")
+  party      String?
+  month      String?
+  service    String?
+  revType    String?
+  revenue    Int?
+  delivery   Int?
+  commission Int?
+  other      Int?
+  status     String?
+  recurring  String?
+  start      String?
+  notes      String?
+  createdAt  DateTime @default(now())
+  createdBy  String?
+  updatedAt  DateTime @updatedAt
+  updatedBy  String?
+
+  @@map("desk_pnl")
+}

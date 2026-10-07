@@ -36,3 +36,6 @@ yarn-error.log*
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# machine-specific dev-server launch config (portable Node path)
+.claude/launch.json

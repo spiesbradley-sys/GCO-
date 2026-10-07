@@ -27,6 +27,10 @@ const credentialsSchema = z.object({
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   session: { strategy: 'jwt' },
+  // Trust the incoming Host header so auth works behind a tunnel/proxy (e.g. a
+  // Cloudflare quick tunnel) as well as on localhost. Safe here; tighten to an
+  // allowlist if this is ever exposed long-term.
+  trustHost: true,
   pages: {
     signIn: '/login',
   },
