@@ -47,8 +47,11 @@ export async function createRecord(input: { board: BoardKey; extra?: Record<stri
 
   const row = await delegate(input.board).create({ data });
   await recordDeskAudit({ action: 'record_created', actorId: me.id, actorEmail: me.email, board: input.board, recordId: row.id, summary: row.name });
+  // New engagements pull straight into the P&L as a linked row.
+  if (input.board === 'engagements') await syncPnlForEngagement({ id: me.id, email: me.email }, row.id);
   revalidatePath('/desk');
   revalidatePath(`/desk/boards/${input.board}`);
+  if (input.board === 'engagements') revalidatePath('/desk/boards/pnl');
   return { ok: true, id: row.id };
 }
 
@@ -79,9 +82,57 @@ export async function updateRecord(input: { board: BoardKey; id: string; patch: 
   if (Object.keys(diff).length) {
     await recordDeskAudit({ action: 'record_updated', actorId: me.id, actorEmail: me.email, board: input.board, recordId: input.id, summary: after.name, diff });
   }
+  // Keep the linked P&L row in step with the engagement.
+  if (input.board === 'engagements') await syncPnlForEngagement({ id: me.id, email: me.email }, input.id);
   revalidatePath('/desk');
   revalidatePath(`/desk/boards/${input.board}`);
+  if (input.board === 'engagements') revalidatePath('/desk/boards/pnl');
   return { ok: true, id: input.id };
+}
+
+// Create or update the P&L row linked to an engagement (pull-to-P&L). Revenue,
+// name, client/party, service, revenue-type and status track the engagement;
+// the booked month and the cost fields (delivery/commission/other) are set once
+// and never overwritten, so manual margin work is preserved.
+async function syncPnlForEngagement(actor: { id: string; email: string }, engagementId: string) {
+  const e = await prisma.deskEngagement.findUnique({ where: { id: engagementId } });
+  if (!e) return;
+  const client = e.client ? await prisma.deskClient.findUnique({ where: { id: e.client }, select: { name: true } }) : null;
+
+  const service =
+    e.service === 'QoE Lite'
+      ? 'QoE Lite'
+      : e.service === 'Cleanup/Catch-up'
+        ? 'Cleanup/Catch-up'
+        : e.service === 'Managed Bookkeeping'
+          ? 'Managed Bookkeeping'
+          : 'Other';
+  const revType = e.service === 'Managed Bookkeeping' ? 'Recurring (monthly)' : 'One-off';
+  const statusMap: Record<string, string> = { Pilot: 'Pilot', Active: 'Active', Paused: 'Paused', Ended: 'Ended' };
+  const status = (e.status && statusMap[e.status]) || 'Active';
+  const recurring = revType.startsWith('Recurring') ? (e.status === 'Ended' ? 'Inactive' : 'Active') : null;
+
+  const tracked = {
+    name: e.name,
+    party: client?.name ?? null,
+    service,
+    revType,
+    revenue: e.fee ?? null,
+    status,
+    recurring,
+    start: e.start ?? null,
+  };
+
+  const existing = await prisma.deskPnlRow.findUnique({ where: { sourceEngagement: engagementId }, select: { id: true } });
+  if (existing) {
+    await prisma.deskPnlRow.update({ where: { id: existing.id }, data: { ...tracked, updatedBy: actor.id } });
+  } else {
+    const month = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const created = await prisma.deskPnlRow.create({
+      data: { sourceEngagement: engagementId, month, createdBy: actor.id, updatedBy: actor.id, ...tracked },
+    });
+    await recordDeskAudit({ action: 'record_created', actorId: actor.id, actorEmail: actor.email, board: 'pnl', recordId: created.id, summary: `${e.name} (auto-linked from engagement)` });
+  }
 }
 
 export async function deleteRecord(input: { board: BoardKey; id: string }): Promise<Result> {

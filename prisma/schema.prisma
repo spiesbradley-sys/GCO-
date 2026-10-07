@@ -901,6 +901,9 @@ model DeskDeal {
 model DeskPnlRow {
   id         String   @id @default(cuid())
   name       String   @default("Untitled")
+  /// Auto-linked engagement (pull-to-P&L). One P&L row per engagement; kept in
+  /// step with the engagement's revenue/service/status. Null for manual rows.
+  sourceEngagement String? @unique
   party      String?
   month      String?
   service    String?
