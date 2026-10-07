@@ -35,11 +35,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: '/login',
   },
   providers: [
-    Google({
-      clientId: process.env.AUTH_GOOGLE_ID,
-      clientSecret: process.env.AUTH_GOOGLE_SECRET,
-      allowDangerousEmailAccountLinking: false,
-    }),
+    // Only register Google when its credentials are present, so a deploy without
+    // OAuth configured still boots (credentials sign-in keeps working).
+    ...(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET
+      ? [
+          Google({
+            clientId: process.env.AUTH_GOOGLE_ID,
+            clientSecret: process.env.AUTH_GOOGLE_SECRET,
+            allowDangerousEmailAccountLinking: false,
+          }),
+        ]
+      : []),
     // TODO: add an Email (magic-link) provider once SMTP is configured.
     Credentials({
       credentials: {

@@ -125,7 +125,7 @@ export async function deskRequestReset(input: { email: string }): Promise<Result
     await prisma.deskPasswordReset.create({
       data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
     });
-    await deliverDeskEmail(email, 'Reset your GCO Service Desk password', `${baseUrl()}/desk/set-password?kind=reset&token=${token}`);
+    await deliverDeskEmail(email, 'Reset your GCO Service Desk password', `${baseUrl()}/desk/set-password?kind=reset&token=${token}`, 'reset');
   }
   return IDENTICAL;
 }

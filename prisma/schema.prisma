@@ -13,8 +13,12 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // Pooled connection for the app at runtime (Neon pooler in prod).
+  url       = env("DATABASE_URL")
+  // Direct (unpooled) connection for schema push / migrations. Locally this is
+  // the same as DATABASE_URL; on Neon it's the non-pooler host.
+  directUrl = env("DIRECT_URL")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

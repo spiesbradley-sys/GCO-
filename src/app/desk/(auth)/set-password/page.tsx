@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { Suspense, useState, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -8,6 +8,14 @@ import { Banner } from '@/components/ui/Banner';
 import { deskSetPassword } from '@/desk/actions/auth';
 
 export default function SetPasswordPage() {
+  return (
+    <Suspense fallback={null}>
+      <SetPasswordInner />
+    </Suspense>
+  );
+}
+
+function SetPasswordInner() {
   const router = useRouter();
   const params = useSearchParams();
   const kind = params.get('kind') === 'reset' ? 'reset' : 'invite';
