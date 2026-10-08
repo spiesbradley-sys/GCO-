@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils';
 import { initials } from '@/lib/utils';
 import { ContextSwitcher } from './ContextSwitcher';
+import { BrandLogo } from './BrandLogo';
 import { Popover } from '@/components/table/Popover';
 import { IconMenu, IconSearch, IconBell } from '@/components/ui/icons';
 import type { SessionMembership } from '@/types/next-auth';
@@ -31,6 +32,9 @@ export function Topbar({
       >
         <IconMenu width={20} height={20} />
       </button>
+      <a href="/dashboard" aria-label="GCO Partners home" className="flex shrink-0 items-center md:hidden">
+        <BrandLogo compact />
+      </a>
       <button
         onClick={onToggleCollapse}
         aria-label="Toggle sidebar"
