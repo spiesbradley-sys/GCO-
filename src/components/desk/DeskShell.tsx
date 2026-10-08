@@ -41,6 +41,7 @@ export function DeskShell({
       </div>
 
       <Group label="Desk">
+        <NavItem href="/desk/my-day" label="My Day" active={isActive('/desk/my-day')} onNav={() => setOpen(false)} />
         <NavItem href="/desk" label="Overview" active={isActive('/desk')} onNav={() => setOpen(false)} />
         <NavItem href="/desk/guide" label="How the desk runs" active={isActive('/desk/guide')} onNav={() => setOpen(false)} />
       </Group>

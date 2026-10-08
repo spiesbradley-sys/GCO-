@@ -232,7 +232,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     fields: [
       { k: 'name', l: 'Cycle', t: 'title' },
       { k: 'engagement', l: 'Engagement', t: 'rel', to: 'engagements' },
-      { k: 'period', l: 'Period', t: 'date' },
+      { k: 'period', l: 'Period', t: 'date', hint: 'Month being closed — sets the close date automatically' },
       {
         k: 'stage',
         l: 'Stage',
@@ -251,7 +251,7 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'capture', l: 'Claude Capture Done', t: 'check' },
       { k: 'bkReview', l: 'Bookkeeper Review Done', t: 'check' },
       { k: 'ctrlReview', l: 'Controller Review Done', t: 'check' },
-      { k: 'slaDue', l: 'SLA Due Date', t: 'date' },
+      { k: 'slaDue', l: 'Close date (SLA)', t: 'date', hint: 'Auto: 5 business days after month-end. Override only for exceptions.' },
       { k: 'slaStatus', l: 'SLA Status', t: 'select', o: o([['On track', 'green'], ['At risk', 'yellow'], ['Breached', 'red'], ['Clock paused'], ['Met', 'blue']]) },
       { k: 'blockers', l: 'Open Blockers', t: 'calc', calc: 'blockers', num: true },
       { k: 'delivered', l: 'Delivered On', t: 'date' },

@@ -10,6 +10,48 @@ export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** Local 'YYYY-MM-DD' for a Date (no timezone shift, unlike toISOString). */
+function toISO(d: Date): string {
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+/** Last calendar day of the month that `isoDate` falls in. */
+export function endOfMonthISO(isoDate: string): string {
+  if (!isoDate) return '';
+  const d = new Date(isoDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  return toISO(new Date(d.getFullYear(), d.getMonth() + 1, 0)); // day 0 of next month
+}
+
+/** Add `n` business days (Mon–Fri) to an ISO date. n = 0 returns the same day. */
+export function addBusinessDays(isoDate: string, n: number): string {
+  if (!isoDate) return '';
+  const d = new Date(isoDate + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  let added = 0;
+  while (added < n) {
+    d.setDate(d.getDate() + 1);
+    const w = d.getDay();
+    if (w && w < 6) added++;
+  }
+  return toISO(d);
+}
+
+/** Standard managed-accounting close SLA: business days after month-end. */
+export const CLOSE_SLA_BD = 5;
+
+/**
+ * The monthly close date for a cycle: `bd` business days after the last day of
+ * the cycle's period month. Every accounting client's books are due closed 5
+ * business days after month-end (e.g. a July period closes on 7 Aug).
+ */
+export function monthlyCloseDate(periodISO: string, bd: number = CLOSE_SLA_BD): string {
+  const eom = endOfMonthISO(periodISO);
+  return eom ? addBusinessDays(eom, bd) : '';
+}
+
 /**
  * Business days between two ISO dates ('YYYY-MM-DD'), excluding Sat/Sun.
  * Signed: negative when b is before a. Mirrors the reference `bdays`.

@@ -112,6 +112,125 @@ export function attention(data: DeskData): Attn[] {
   return out.sort((a, b) => rank[a.sev] - rank[b.sev]);
 }
 
+// ── My Day (personal to-do dashboard) ─────────────────────────────────────────
+export type MyDayAction = 'review-capture' | 'review-bk' | 'review-ctrl' | 'open-cycle' | 'resolve-query';
+export type MyDayItem = {
+  b: BoardKey;
+  id: string; // record to open / act on (engagement id for open-cycle)
+  title: string;
+  sub: string;
+  chipText?: string;
+  chipTone?: 'danger' | 'warning' | 'neutral';
+  action?: MyDayAction;
+};
+export type MyDay = {
+  name: string;
+  counts: { dueToday: number; overdue: number; queries: number; inFlight: number };
+  dueAndOverdue: MyDayItem[];
+  waiting: MyDayItem[];
+  queries: MyDayItem[];
+  thisWeek: MyDayItem[];
+};
+
+/** Personal, assignment-scoped to-do list for one desk user. Works for any role:
+ * it looks only at engagements where the user is the accountant or controller. */
+export function myDay(data: DeskData, viewer: { id: string; name: string | null; email: string }): MyDay {
+  const t = todayISO();
+  const mine = (data.engagements as Rec[]).filter((e) => e.bookkeeper === viewer.id || e.controller === viewer.id);
+  const myIds = new Set(mine.map((e) => e.id));
+  const asAccountant = new Set(mine.filter((e) => e.bookkeeper === viewer.id).map((e) => e.id));
+  const asController = new Set(mine.filter((e) => e.controller === viewer.id).map((e) => e.id));
+
+  const partyOf = (engId: unknown): string => {
+    const e = rec(data, 'engagements', engId);
+    const c = e && rec(data, 'clients', (e as Rec).client);
+    return ((c as Rec | undefined)?.name as string) || ((e as Rec | undefined)?.name as string) || 'Unassigned';
+  };
+
+  const cycles = (data.cycles as Rec[]).filter((c) => myIds.has(c.engagement));
+  const inFlight = cycles.filter((c) => !CYCLE_DONE.includes(c.stage as string) && c.stage !== 'Closed');
+
+  // Due today & overdue
+  const dueAndOverdue: MyDayItem[] = inFlight
+    .filter((c) => c.slaDue && (c.slaDue as string) <= t)
+    .sort((a, b) => String(a.slaDue).localeCompare(String(b.slaDue)))
+    .map((c) => {
+      const overdue = (c.slaDue as string) < t;
+      const late = overdue ? businessDays(c.slaDue as string, t) : 0;
+      return {
+        b: 'cycles' as BoardKey,
+        id: c.id as string,
+        title: c.name as string,
+        sub: `${partyOf(c.engagement)} · ${(c.stage as string) || 'No stage'}`,
+        chipText: overdue ? `${late} BD late` : 'Due today',
+        chipTone: overdue ? ('danger' as const) : ('warning' as const),
+      };
+    });
+
+  // Waiting on you — review gates + engagements with no open cycle
+  const waiting: MyDayItem[] = [];
+  inFlight.forEach((c) => {
+    const base = { b: 'cycles' as BoardKey, id: c.id as string, title: c.name as string };
+    if (asAccountant.has(c.engagement)) {
+      if (!c.capture && c.stage !== 'Awaiting Close') waiting.push({ ...base, sub: `${partyOf(c.engagement)} · capture not done`, action: 'review-capture' });
+      else if (c.capture && !c.bkReview) waiting.push({ ...base, sub: `${partyOf(c.engagement)} · bookkeeper review not ticked`, action: 'review-bk' });
+    }
+    if (asController.has(c.engagement) && !c.ctrlReview && ['Review', 'Dashboard Prep'].includes(c.stage as string)) {
+      waiting.push({ ...base, sub: `${partyOf(c.engagement)} · controller review pending`, action: 'review-ctrl' });
+    }
+  });
+  mine
+    .filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot'].includes(e.status as string))
+    .filter((e) => !(data.cycles as Rec[]).some((c) => c.engagement === e.id && c.stage !== 'Closed'))
+    .forEach((e) => waiting.push({ b: 'engagements', id: e.id as string, title: e.name as string, sub: `${partyOf(e.id)} · no cycle opened yet`, action: 'open-cycle' }));
+
+  // Open queries on my engagements (or that I own)
+  const myCycleIds = new Set(cycles.map((c) => c.id));
+  const queries: MyDayItem[] = (data.queries as Rec[])
+    .filter((q) => q.status !== 'Resolved' && (q.owner === viewer.id || myCycleIds.has(q.cycle)))
+    .map((q) => {
+      const age = q.raised ? businessDays(q.raised as string, t) : 0;
+      const cyc = rec(data, 'cycles', q.cycle);
+      return {
+        item: {
+          b: 'queries' as BoardKey,
+          id: q.id as string,
+          title: q.name as string,
+          sub: `${cyc ? partyOf((cyc as Rec).engagement) : 'No cycle'} · ${(q.status as string) || 'Open'}`,
+          chipText: age > 1 ? `${age} BD · past SLA` : `${age} BD`,
+          chipTone: age > 1 ? ('danger' as const) : ('warning' as const),
+          action: 'resolve-query' as MyDayAction,
+        },
+        age,
+      };
+    })
+    .sort((a, b) => b.age - a.age)
+    .map((x) => x.item);
+
+  // Coming up — due within the next 5 business days
+  const thisWeek: MyDayItem[] = inFlight
+    .filter((c) => c.slaDue && (c.slaDue as string) > t && businessDays(t, c.slaDue as string) <= 5)
+    .sort((a, b) => String(a.slaDue).localeCompare(String(b.slaDue)))
+    .map((c) => {
+      const n = businessDays(t, c.slaDue as string);
+      return { b: 'cycles' as BoardKey, id: c.id as string, title: c.name as string, sub: `${partyOf(c.engagement)} · ${(c.stage as string) || 'No stage'}`, chipText: `in ${n} BD`, chipTone: 'neutral' as const };
+    });
+
+  return {
+    name: viewer.name || viewer.email,
+    counts: {
+      dueToday: dueAndOverdue.filter((i) => i.chipText === 'Due today').length,
+      overdue: dueAndOverdue.filter((i) => i.chipTone === 'danger').length,
+      queries: queries.length,
+      inFlight: inFlight.length,
+    },
+    dueAndOverdue,
+    waiting,
+    queries,
+    thisWeek,
+  };
+}
+
 // ── Dashboard aggregation ─────────────────────────────────────────────────────
 function monthKey(s: unknown): number | null {
   if (!s) return null;

@@ -1,5 +1,19 @@
 import { describe, it, expect } from 'vitest';
-import { businessDays, rack, dealClock, margin, marginPct, queryAge, cycleSev } from './compute';
+import { businessDays, rack, dealClock, margin, marginPct, queryAge, cycleSev, endOfMonthISO, addBusinessDays, monthlyCloseDate } from './compute';
+
+describe('monthly close date', () => {
+  it('finds the last calendar day of the month', () => {
+    expect(endOfMonthISO('2026-07-15')).toBe('2026-07-31');
+    expect(endOfMonthISO('2026-02-10')).toBe('2026-02-28'); // 2026 is not a leap year
+  });
+  it('adds business days, skipping weekends', () => {
+    expect(addBusinessDays('2026-08-07', 1)).toBe('2026-08-10'); // Fri -> Mon
+    expect(addBusinessDays('2026-08-10', 0)).toBe('2026-08-10');
+  });
+  it('is 5 business days after month-end (matches the seed: Jul period -> 7 Aug)', () => {
+    expect(monthlyCloseDate('2026-07-01')).toBe('2026-08-07');
+  });
+});
 
 describe('businessDays', () => {
   it('counts weekdays only, exclusive of start', () => {
