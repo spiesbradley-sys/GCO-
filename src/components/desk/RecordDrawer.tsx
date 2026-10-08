@@ -128,6 +128,28 @@ export function RecordDrawer({
           </div>
         )}
 
+        {/* team pulled through from the engagement (read-only) */}
+        {board === 'cycles' &&
+          (() => {
+            const eng = (data.engagements as Rec[]).find((e) => e.id === record.engagement);
+            if (!eng) return null;
+            const nameOf = (uid: unknown) => {
+              const u = users.find((x) => x.id === uid);
+              return u ? u.name ?? u.email : null;
+            };
+            return (
+              <div className="flex flex-col gap-1.5 border-t border-border-subtle pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-header text-ink-tertiary">Team · from engagement</p>
+                <div className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1 text-[13px]">
+                  <span className="text-ink-tertiary">Accountant</span>
+                  <span className="text-ink">{nameOf(eng.bookkeeper) ?? '—'}</span>
+                  <span className="text-ink-tertiary">Financial Controller</span>
+                  <span className="text-ink">{nameOf(eng.controller) ?? '—'}</span>
+                </div>
+              </div>
+            );
+          })()}
+
         {/* warnings */}
         {warnings.map((w, i) => (
           <div key={i} className="flex items-start gap-2 rounded-input bg-watch-tint px-3 py-2 text-[12.5px] text-watch">

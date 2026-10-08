@@ -3,8 +3,9 @@ import { requireDeskUser } from '@/lib/desk/auth';
 import { loadDeskDataForUser } from '@/lib/desk/db';
 import { BoardView } from '@/components/desk/BoardView';
 import { IntakeLinkButton } from '@/components/desk/IntakeLinkButton';
+import { GenerateCyclesButton } from '@/components/desk/GenerateCyclesButton';
 import { BOARDS } from '@/desk/boards';
-import { canReadBoard, canWriteBoard, canCreateBoard, type BoardKey, type DeskRole } from '@/desk/roles';
+import { canReadBoard, canWriteBoard, canCreateBoard, canViewAnyDay, type BoardKey, type DeskRole } from '@/desk/roles';
 
 const VALID = new Set(Object.keys(BOARDS));
 
@@ -32,7 +33,7 @@ export default async function BoardPage({
       canWrite={canWriteBoard(role, board)}
       canCreate={canCreateBoard(role, board)}
       initialOpenId={searchParams.open}
-      headerExtra={board === 'intake' ? <IntakeLinkButton /> : undefined}
+      headerExtra={board === 'intake' ? <IntakeLinkButton /> : board === 'cycles' && canViewAnyDay(role) ? <GenerateCyclesButton /> : undefined}
     />
   );
 }
