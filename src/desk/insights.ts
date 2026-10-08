@@ -263,6 +263,26 @@ export function myDayForMembers(
   return merged;
 }
 
+// ── Recurring revenue ─────────────────────────────────────────────────────────
+export type RecurringRow = { id: string; name: string; client: string; feeCents: number; status: string; start: string; annualCents: number };
+export type RecurringRevenue = { rows: RecurringRow[]; liveCents: number; pilotCents: number; pausedCents: number; activeCount: number };
+
+/** Canonical recurring revenue: one row per managed-accounting engagement (the
+ * accounting clients), using the engagement's monthly fee — NOT the month-by-
+ * month P&L rows, which double-count a client that has several monthly rows. */
+export function recurringRevenue(data: DeskData): RecurringRevenue {
+  const clientName = (id: unknown) => (data.clients as Rec[]).find((c) => c.id === id)?.name as string | undefined;
+  const rows: RecurringRow[] = (data.engagements as Rec[])
+    .filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot', 'Paused'].includes(e.status as string))
+    .map((e) => {
+      const fee = money0(e.fee);
+      return { id: e.id as string, name: e.name as string, client: clientName(e.client) ?? '', feeCents: fee, status: (e.status as string) || '', start: (e.start as string) || '', annualCents: fee * 12 };
+    })
+    .sort((a, b) => b.feeCents - a.feeCents);
+  const sumBy = (s: string) => rows.filter((r) => r.status === s).reduce((a, r) => a + r.feeCents, 0);
+  return { rows, liveCents: sumBy('Active'), pilotCents: sumBy('Pilot'), pausedCents: sumBy('Paused'), activeCount: rows.filter((r) => r.status === 'Active').length };
+}
+
 // ── Dashboard aggregation ─────────────────────────────────────────────────────
 function monthKey(s: unknown): number | null {
   if (!s) return null;
@@ -279,9 +299,11 @@ export function deskDashboard(data: DeskData) {
   const P = data.pnl, D = data.deals, Q = data.queries, C = data.cycles, CL = data.clients, E = data.engagements;
   const t = todayISO();
 
-  const recurring = P.filter((r) => r.revType === 'Recurring (monthly)');
-  const live = recurring.filter((r) => r.recurring === 'Active').reduce((a, r) => a + money0(r.revenue), 0);
-  const soon = recurring.filter((r) => r.recurring === 'Yet to start').reduce((a, r) => a + money0(r.revenue), 0);
+  // Recurring revenue comes from the engagements (one per client), not the
+  // month-by-month P&L rows — see recurringRevenue().
+  const rr = recurringRevenue(data);
+  const live = rr.liveCents;
+  const soon = rr.pilotCents;
   const rev = P.reduce((a, r) => a + money0(r.revenue), 0);
   const costed = P.filter((r) => r.delivery != null && r.delivery !== '');
   const costedRev = costed.reduce((a, r) => a + money0(r.revenue), 0);
@@ -305,7 +327,7 @@ export function deskDashboard(data: DeskData) {
   const fmtMoney = (c: number) => '$' + Math.round(c / 100).toLocaleString('en-US');
 
   const commercialKpis: Kpi[] = [
-    { label: 'Recurring revenue live', value: `${fmtMoney(live)}/mo`, sub: `${fmtMoney(live * 12)} annual run-rate${soon ? ` · +${fmtMoney(soon)}/mo starting` : ''}` },
+    { label: 'Recurring revenue live', value: `${fmtMoney(live)}/mo`, sub: `${fmtMoney(live * 12)} annual run-rate${soon ? ` · +${fmtMoney(soon)}/mo in pilot` : ''}` },
     { label: 'Booked this month', value: fmtMoney(thisMonth), sub: `${fmtMoney(rev)} across all ${P.length} P&L rows` },
     { label: 'Gross margin (costed rows)', value: `${costedRev ? Math.round((costedGm / costedRev) * 100) : 0}%`, sub: `${fmtMoney(costedGm)} on ${fmtMoney(costedRev)}${costed.length < P.length ? ` · ${P.length - costed.length} uncosted excluded` : ''}`, flag: costed.length < P.length },
     { label: 'QoE fees awaiting payment', value: fmtMoney(unpaid.reduce((a, d) => a + money0(d.fee), 0)), sub: `${unpaid.length} deal${unpaid.length === 1 ? '' : 's'} · ${inflight.length} in flight worth ${fmtMoney(inflight.reduce((a, d) => a + money0(d.fee), 0))}`, flag: unpaid.length > 0 },

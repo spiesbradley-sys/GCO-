@@ -71,6 +71,7 @@ export function DeskShell({
 
       {canReadBoard(user.role, 'pnl') && (
         <Group label="Commercials">
+          <NavItem href="/desk/recurring" label="Recurring Revenue" active={isActive('/desk/recurring')} onNav={() => setOpen(false)} />
           <NavItem href="/desk/boards/pnl" label="Dental P&L" count={counts.pnl} active={isActive('/desk/boards/pnl')} onNav={() => setOpen(false)} />
         </Group>
       )}
