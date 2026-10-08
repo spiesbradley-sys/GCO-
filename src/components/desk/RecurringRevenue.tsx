@@ -5,22 +5,21 @@ import type { RecurringRevenue as RRData } from '@/desk/insights';
 const m = (c: number) => '$' + Math.round(c / 100).toLocaleString('en-US');
 
 export function RecurringRevenue({ data }: { data: RRData }) {
-  const { rows, liveCents, startingCents, inactiveCents, activeCount } = data;
+  const { rows, liveCents, pendingCents, signedCount } = data;
   return (
     <div className="flex flex-col gap-5">
       <div>
         <span className="eyebrow">Commercials</span>
         <h1 className="font-heading text-page-title text-ink">Recurring revenue</h1>
         <p className="max-w-2xl text-[15px] text-ink-secondary">
-          One row per recurring client, by monthly fee. Live MRR is what the Overview uses — it counts each client once, instead of summing the month-by-month P&amp;L rows.
+          One row per recurring client, by monthly fee. A client counts as live once its engagement letter is signed — that&apos;s when work and billing start. This is the number the Overview uses.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border-subtle pb-4">
-        <Stat value={`${m(liveCents)}/mo`} label={`Live MRR · ${activeCount} active`} />
+        <Stat value={`${m(liveCents)}/mo`} label={`Live MRR · ${signedCount} signed`} />
         <Stat value={m(liveCents * 12)} label="Annual run-rate" divide />
-        {startingCents > 0 && <Stat value={`${m(startingCents)}/mo`} label="Starting soon" divide />}
-        {inactiveCents > 0 && <Stat value={`${m(inactiveCents)}/mo`} label="Inactive" divide />}
+        {pendingCents > 0 && <Stat value={`${m(pendingCents)}/mo`} label="Awaiting letter" divide />}
       </div>
 
       {rows.length === 0 ? (
@@ -58,7 +57,7 @@ export function RecurringRevenue({ data }: { data: RRData }) {
               <tfoot>
                 <tr className="border-t border-border-default">
                   <td className="px-4 py-2.5 font-semibold text-ink" colSpan={3}>
-                    Live total · {activeCount} active
+                    Live total · {signedCount} signed
                   </td>
                   <td className="px-4 py-2.5 text-right font-semibold tnum text-ink">{m(liveCents)}/mo</td>
                   <td className="px-4 py-2.5 text-right font-semibold tnum text-ink">{m(liveCents * 12)}</td>
@@ -91,12 +90,10 @@ function Th({ children, right }: { children: React.ReactNode; right?: boolean })
 
 function StatusChip({ status }: { status: string }) {
   const tone =
-    status === 'Active'
+    status === 'Letter signed'
       ? 'bg-favorable-tint text-favorable'
-      : status === 'Yet to start'
+      : status === 'Letter pending'
         ? 'bg-watch-tint text-watch'
-        : status === 'Inactive'
-          ? 'bg-unfavorable-tint text-unfavorable'
-          : 'bg-surface-sunken text-ink-tertiary';
+        : 'bg-surface-sunken text-ink-tertiary';
   return <span className={cn('inline-flex rounded-pill px-2.5 py-0.5 text-[12px] font-semibold', tone)}>{status || '—'}</span>;
 }
