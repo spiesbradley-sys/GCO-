@@ -104,12 +104,12 @@ export function RecordDrawer({
     >
       <div key={stamp} className="flex flex-col gap-5">
         {/* title */}
-        <DeskField field={nameField} record={record} data={data} users={users} canWrite={canWrite} onPatch={patch} onOpen={onOpen} prominent />
+        <DeskField field={nameField} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} prominent />
 
         {/* short fields */}
         <div className="grid grid-cols-[140px_1fr] items-start gap-x-3 gap-y-2.5">
           {shortFields.map((f) => (
-            <DeskRow key={f.k} field={f} record={record} data={data} users={users} canWrite={canWrite} onPatch={patch} onOpen={onOpen} />
+            <DeskRow key={f.k} field={f} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} />
           ))}
         </div>
 
@@ -122,7 +122,7 @@ export function RecordDrawer({
                   {f.l}
                   {f.hint ? <span className="text-ink-tertiary"> · {f.hint}</span> : null}
                 </label>
-                <DeskField field={f} record={record} data={data} users={users} canWrite={canWrite} onPatch={patch} onOpen={onOpen} />
+                <DeskField field={f} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} />
               </div>
             ))}
           </div>
@@ -191,6 +191,7 @@ function DeskField({
   record: r,
   data,
   users,
+  role,
   canWrite,
   onPatch,
   onOpen,
@@ -200,6 +201,7 @@ function DeskField({
   record: Rec;
   data: DeskData;
   users: { id: string; name: string | null; email: string; role?: string }[];
+  role: DeskRole;
   canWrite: boolean;
   onPatch: (p: Rec) => void;
   onOpen: (t: OpenTarget) => void;
@@ -207,7 +209,9 @@ function DeskField({
 }) {
   const v = r[f.k];
   const id = `f-${f.k}`;
-  const dis = !canWrite;
+  // A field is editable only if the user can write the board AND (when the field
+  // is locked) their role is on its allow-list.
+  const dis = !canWrite || (f.lock ? !f.lock.includes(role) : false);
 
   switch (f.t) {
     case 'title':

@@ -42,6 +42,9 @@ export type Field = {
   /** person fields only: restrict the picker to these roles (the current
    * assignee is always kept selectable even if their role is not listed). */
   pr?: DeskRole[];
+  /** only these roles may edit the field; everyone else sees it read-only
+   * (enforced server-side in updateRecord). */
+  lock?: DeskRole[];
   /** calc kind computed server-side */
   calc?: 'rack' | 'dealClock' | 'margin' | 'marginPct' | 'queryAge' | 'blockers';
   money?: boolean; // calc renders as money
@@ -204,8 +207,8 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'slaDelivery', l: 'SLA: Delivery (BD from close)', t: 'num' },
       { k: 'slaMeeting', l: 'SLA: Meeting (BD from delivery)', t: 'num' },
       { k: 'slaQuery', l: 'SLA: Query response (BD)', t: 'num' },
-      { k: 'controller', l: 'Financial Controller', t: 'person', pr: ['controller', 'management', 'owner'], hint: 'Sees this engagement; controllers see all' },
-      { k: 'bookkeeper', l: 'Accountant', t: 'person', pr: ['accountant', 'management', 'owner'], hint: 'The assigned accountant sees only engagements assigned to them' },
+      { k: 'controller', l: 'Financial Controller', t: 'person', pr: ['controller', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'Sees this engagement; controllers see all. Set by controllers/management.' },
+      { k: 'bookkeeper', l: 'Accountant', t: 'person', pr: ['accountant', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'The assigned accountant sees only engagements assigned to them. Set by controllers/management.' },
       { k: 'start', l: 'Start Date', t: 'date' },
       { k: 'pilotEnd', l: 'Pilot End Date', t: 'date' },
       { k: 'scope', l: 'Scope Summary', t: 'long' },

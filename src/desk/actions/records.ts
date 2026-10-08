@@ -92,6 +92,12 @@ export async function updateRecord(input: { board: BoardKey; id: string; patch: 
 
   const patch = sanitizePatch(input.board, input.patch);
 
+  // Drop any locked field this role may not edit (e.g. the engagement's
+  // accountant/controller assignment slots — set by controllers/management).
+  for (const fdef of BOARDS[input.board].fields) {
+    if (fdef.lock && !fdef.lock.includes(role) && fdef.k in patch) delete patch[fdef.k];
+  }
+
   // Auto-fill rules (keep the dated trail honest).
   if (input.board === 'queries' && patch.status === 'Resolved' && !before.resolved && !('resolved' in patch)) {
     patch.resolved = todayISO();
