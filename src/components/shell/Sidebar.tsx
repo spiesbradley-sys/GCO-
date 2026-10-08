@@ -7,6 +7,7 @@ import type { Role } from '@prisma/client';
 import { cn } from '@/lib/utils';
 import { can } from '@/lib/rbac';
 import { NAV } from './nav';
+import { BrandLogo } from './BrandLogo';
 import {
   IconMenu,
   IconDocument,
@@ -57,10 +58,9 @@ export function Sidebar({
       aria-label="Primary"
     >
       <div className={cn('flex items-center px-2', collapsed && 'justify-center px-0')}>
-        {/* Logo lockup — never recolor or re-letter. */}
-        <span className="font-heading text-[18px] font-extrabold tracking-tight text-accent-primary">
-          {collapsed ? 'G' : 'GCO Partners'}
-        </span>
+        <Link href="/dashboard" aria-label="GCO Partners home" className="flex items-center">
+          <BrandLogo compact={collapsed} />
+        </Link>
       </div>
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto">

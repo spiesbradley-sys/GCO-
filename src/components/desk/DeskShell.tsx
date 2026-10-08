@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { cn, initials } from '@/lib/utils';
 import { ToastProvider } from '@/components/ui/Toast';
 import { IconMenu } from '@/components/ui/icons';
+import { BrandLogo } from '@/components/shell/BrandLogo';
 import { MANAGED_ORDER, BOARDS } from '@/desk/boards';
 import { DESK_ROLE_LABEL, canReadBoard, type DeskRole } from '@/desk/roles';
 import { deskLogout } from '@/desk/actions/auth';
@@ -36,8 +37,10 @@ export function DeskShell({
   const rail = (
     <nav className="flex h-full w-60 flex-col gap-5 overflow-y-auto border-r border-border-subtle bg-surface-card px-3 py-5" aria-label="Desk">
       <div className="px-2">
-        <p className="font-heading text-[17px] font-extrabold tracking-tight text-accent-primary">GCO Service Desk</p>
-        <p className="text-[12px] text-ink-tertiary">Managed Accounting · QofE Lite</p>
+        <Link href="/desk" aria-label="GCO Service Desk home" className="flex flex-col items-start gap-1">
+          <BrandLogo />
+          <span className="text-[12px] text-ink-tertiary">Service Desk</span>
+        </Link>
       </div>
 
       <Group label="Desk">
@@ -106,9 +109,14 @@ export function DeskShell({
         </div>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <button onClick={() => setOpen(true)} className="m-3 inline-flex w-fit items-center gap-2 rounded-input border border-border-default bg-surface-card px-3 py-2 text-[13px] md:hidden">
-          <IconMenu width={16} height={16} /> Boards
-        </button>
+        <div className="flex items-center gap-3 px-4 py-3 md:hidden">
+          <Link href="/desk" aria-label="GCO Service Desk home" className="shrink-0">
+            <BrandLogo compact />
+          </Link>
+          <button onClick={() => setOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-input border border-border-default bg-surface-card px-3 py-2 text-[13px]">
+            <IconMenu width={16} height={16} /> Boards
+          </button>
+        </div>
         <main className="flex-1 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-content">{children}</div>
         </main>
