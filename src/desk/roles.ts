@@ -43,17 +43,62 @@ const CORE_BOARDS: BoardKey[] = [
   'deals',
 ];
 
-/** Can this role read the given board? */
-export function canReadBoard(role: DeskRole, board: BoardKey): boolean {
-  if (board === 'pnl') return can(role, 'pnl.read');
-  return true; // all roles read the core boards + deals
+// Boards an accountant may create children on (only ever reached from a parent
+// record they can already see — the scope check lives in the server action).
+const ACCOUNTANT_CHILD_BOARDS: BoardKey[] = ['cycles', 'queries', 'deliverables'];
+
+/** True when this role sees only the engagements it is assigned to (plus what
+ * rolls up to them). Everyone else sees the whole desk. */
+export function scopesToAssignedEngagements(role: DeskRole): boolean {
+  return role === 'accountant';
 }
 
-/** Can this role write (create/update/delete) the given board? */
+/** Can this role read the given board at all? (Accountants still only see the
+ * rows that roll up to their engagements — row scoping is applied separately.) */
+export function canReadBoard(role: DeskRole, board: BoardKey): boolean {
+  if (board === 'pnl') return can(role, 'pnl.read');
+  if (board === 'deals') return role !== 'accountant'; // QoE pipeline is commercial
+  return true; // all other roles read the core boards
+}
+
+/** Can this role update/delete records on the given board? (For accountants the
+ * record must also be in scope — enforced in the server action.) */
 export function canWriteBoard(role: DeskRole, board: BoardKey): boolean {
   if (board === 'pnl') return can(role, 'pnl.write');
-  return CORE_BOARDS.includes(board); // all roles write core boards + deals
+  if (board === 'deals') return role !== 'accountant';
+  return CORE_BOARDS.includes(board);
 }
+
+/** Can this role create a new top-level record on the given board? Accountants
+ * never create top-level rows — they only add children under a visible parent
+ * (see canCreateChild), so a stray row can never fall outside their scope. */
+export function canCreateBoard(role: DeskRole, board: BoardKey): boolean {
+  if (role === 'accountant') return false;
+  if (board === 'pnl') return can(role, 'pnl.write');
+  return CORE_BOARDS.includes(board);
+}
+
+/** Can this role add a child record (cycle/query/deliverable) under a parent it
+ * can see? This is the one create path open to accountants. */
+export function canCreateChild(role: DeskRole, childBoard: BoardKey): boolean {
+  if (role === 'accountant') return ACCOUNTANT_CHILD_BOARDS.includes(childBoard);
+  return canCreateBoard(role, childBoard);
+}
+
+/** Can this role delete a record on the given board? Accountants may clear their
+ * own operational children but never a setup record (client/engagement). */
+export function canDeleteBoard(role: DeskRole, board: BoardKey): boolean {
+  if (role === 'accountant') return ACCOUNTANT_CHILD_BOARDS.includes(board);
+  return canWriteBoard(role, board);
+}
+
+/** The parent board + foreign key for each child board (child creates attach
+ * here; used to scope-check an accountant's additions). */
+export const CHILD_LINK: Partial<Record<BoardKey, { parentBoard: BoardKey; fk: string }>> = {
+  cycles: { parentBoard: 'engagements', fk: 'engagement' },
+  queries: { parentBoard: 'cycles', fk: 'cycle' },
+  deliverables: { parentBoard: 'cycles', fk: 'cycle' },
+};
 
 /** General capability check. */
 export function can(role: DeskRole, action: DeskAction): boolean {
@@ -62,12 +107,13 @@ export function can(role: DeskRole, action: DeskAction): boolean {
     case 'board.write':
       return true; // gated per-board by canReadBoard/canWriteBoard
     case 'pnl.read':
-      return role === 'owner' || role === 'management' || role === 'controller';
+      // Commercials are management-only (owner included).
+      return role === 'owner' || role === 'management';
     case 'pnl.write':
       return role === 'owner' || role === 'management';
     case 'commercial.view':
-      // The dashboard's Commercial section is hidden for accountants.
-      return role !== 'accountant';
+      // The dashboard's Commercial section is management-only (owner included).
+      return role === 'owner' || role === 'management';
     case 'team.manage':
       return role === 'owner';
     case 'audit.view':

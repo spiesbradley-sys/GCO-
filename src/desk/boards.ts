@@ -1,4 +1,4 @@
-import type { BoardKey } from './roles';
+import type { BoardKey, DeskRole } from './roles';
 
 // Board schema — mirrors the reference `BOARDS` object field-for-field, in order.
 // Drives generic table/kanban/drawer rendering and server-side write validation.
@@ -39,6 +39,9 @@ export type Field = {
   o?: Opt[];
   to?: BoardKey; // rel target
   hint?: string;
+  /** person fields only: restrict the picker to these roles (the current
+   * assignee is always kept selectable even if their role is not listed). */
+  pr?: DeskRole[];
   /** calc kind computed server-side */
   calc?: 'rack' | 'dealClock' | 'margin' | 'marginPct' | 'queryAge' | 'blockers';
   money?: boolean; // calc renders as money
@@ -201,8 +204,8 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'slaDelivery', l: 'SLA: Delivery (BD from close)', t: 'num' },
       { k: 'slaMeeting', l: 'SLA: Meeting (BD from delivery)', t: 'num' },
       { k: 'slaQuery', l: 'SLA: Query response (BD)', t: 'num' },
-      { k: 'controller', l: 'Financial Controller', t: 'person' },
-      { k: 'bookkeeper', l: 'Bookkeeper', t: 'person' },
+      { k: 'controller', l: 'Financial Controller', t: 'person', pr: ['controller', 'management', 'owner'], hint: 'Sees this engagement; controllers see all' },
+      { k: 'bookkeeper', l: 'Accountant', t: 'person', pr: ['accountant', 'management', 'owner'], hint: 'The assigned accountant sees only engagements assigned to them' },
       { k: 'start', l: 'Start Date', t: 'date' },
       { k: 'pilotEnd', l: 'Pilot End Date', t: 'date' },
       { k: 'scope', l: 'Scope Summary', t: 'long' },

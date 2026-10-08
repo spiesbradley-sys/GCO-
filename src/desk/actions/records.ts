@@ -4,9 +4,18 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/prisma';
 import { requireDeskUserAction } from '@/lib/desk/auth';
 import { recordDeskAudit, diffRecords } from '@/lib/desk/audit';
-import { delegate } from '@/lib/desk/db';
+import { delegate, canTouchRecord, canTouchParent, type DeskViewer } from '@/lib/desk/db';
 import { BOARDS } from '@/desk/boards';
-import { canWriteBoard, type BoardKey } from '@/desk/roles';
+import {
+  canWriteBoard,
+  canCreateBoard,
+  canCreateChild,
+  canDeleteBoard,
+  scopesToAssignedEngagements,
+  CHILD_LINK,
+  type BoardKey,
+  type DeskRole,
+} from '@/desk/roles';
 import { todayISO } from '@/desk/compute';
 
 type Result = { ok: boolean; error?: string; id?: string };
@@ -40,7 +49,23 @@ function sanitizePatch(board: BoardKey, patch: Record<string, unknown>): Record<
 
 export async function createRecord(input: { board: BoardKey; extra?: Record<string, unknown> }): Promise<Result> {
   const me = await requireDeskUserAction();
-  if (!canWriteBoard(me.role, input.board)) return { ok: false, error: 'You do not have access to create this.' };
+  const role = me.role as DeskRole;
+  const viewer: DeskViewer = { id: me.id, role };
+
+  if (scopesToAssignedEngagements(role)) {
+    // Accountants never create top-level rows — only a child under a parent they
+    // can see (verified against their scope so an id can't be hand-crafted).
+    const link = CHILD_LINK[input.board];
+    const parentId = link ? input.extra?.[link.fk] : undefined;
+    if (!link || !parentId || !canCreateChild(role, input.board)) {
+      return { ok: false, error: 'You can only add items under an engagement assigned to you.' };
+    }
+    if (!(await canTouchParent(viewer, link.parentBoard, String(parentId)))) {
+      return { ok: false, error: 'That engagement is not assigned to you.' };
+    }
+  } else if (!canCreateBoard(role, input.board)) {
+    return { ok: false, error: 'You do not have access to create this.' };
+  }
 
   const data: Record<string, unknown> = { name: 'Untitled', createdBy: me.id, updatedBy: me.id, ...sanitizePatch(input.board, input.extra ?? {}) };
   if (input.board === 'deals' && !data.created) data.created = todayISO();
@@ -57,7 +82,10 @@ export async function createRecord(input: { board: BoardKey; extra?: Record<stri
 
 export async function updateRecord(input: { board: BoardKey; id: string; patch: Record<string, unknown> }): Promise<Result> {
   const me = await requireDeskUserAction();
-  if (!canWriteBoard(me.role, input.board)) return { ok: false, error: 'You do not have access to edit this.' };
+  const role = me.role as DeskRole;
+  if (!canWriteBoard(role, input.board)) return { ok: false, error: 'You do not have access to edit this.' };
+  if (scopesToAssignedEngagements(role) && !(await canTouchRecord({ id: me.id, role }, input.board, input.id)))
+    return { ok: false, error: 'That record is not in your assigned engagements.' };
 
   const before = await delegate(input.board).findUnique({ where: { id: input.id } });
   if (!before) return { ok: false, error: 'That record no longer exists.' };
@@ -137,7 +165,10 @@ async function syncPnlForEngagement(actor: { id: string; email: string }, engage
 
 export async function deleteRecord(input: { board: BoardKey; id: string }): Promise<Result> {
   const me = await requireDeskUserAction();
-  if (!canWriteBoard(me.role, input.board)) return { ok: false, error: 'You do not have access to delete this.' };
+  const role = me.role as DeskRole;
+  if (!canDeleteBoard(role, input.board)) return { ok: false, error: 'You do not have access to delete this.' };
+  if (scopesToAssignedEngagements(role) && !(await canTouchRecord({ id: me.id, role }, input.board, input.id)))
+    return { ok: false, error: 'That record is not in your assigned engagements.' };
 
   const before = await delegate(input.board).findUnique({ where: { id: input.id } });
   if (!before) return { ok: false, error: 'That record no longer exists.' };

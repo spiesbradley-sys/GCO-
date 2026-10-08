@@ -1,10 +1,10 @@
 import { notFound, redirect } from 'next/navigation';
 import { requireDeskUser } from '@/lib/desk/auth';
-import { loadAllDeskData } from '@/lib/desk/db';
+import { loadDeskDataForUser } from '@/lib/desk/db';
 import { BoardView } from '@/components/desk/BoardView';
 import { IntakeLinkButton } from '@/components/desk/IntakeLinkButton';
 import { BOARDS } from '@/desk/boards';
-import { canReadBoard, canWriteBoard, type BoardKey, type DeskRole } from '@/desk/roles';
+import { canReadBoard, canWriteBoard, canCreateBoard, type BoardKey, type DeskRole } from '@/desk/roles';
 
 const VALID = new Set(Object.keys(BOARDS));
 
@@ -23,12 +23,14 @@ export default async function BoardPage({
   // Resolve permission before rendering — never render then error.
   if (!canReadBoard(role, board)) redirect('/desk/403');
 
-  const data = await loadAllDeskData();
+  const data = await loadDeskDataForUser({ id: user.id, role });
   return (
     <BoardView
       board={board}
       data={data}
+      role={role}
       canWrite={canWriteBoard(role, board)}
+      canCreate={canCreateBoard(role, board)}
       initialOpenId={searchParams.open}
       headerExtra={board === 'intake' ? <IntakeLinkButton /> : undefined}
     />

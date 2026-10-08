@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useToast } from '@/components/ui/Toast';
 import { IconSearch, IconDocument } from '@/components/ui/icons';
 import { BOARDS, field, type View } from '@/desk/boards';
-import type { BoardKey } from '@/desk/roles';
+import type { BoardKey, DeskRole } from '@/desk/roles';
 import { enrichRows } from '@/desk/enrich';
 import { cycleSev, type Rec } from '@/desk/compute';
 import type { DeskData } from '@/desk/insights';
@@ -19,13 +19,17 @@ import { createRecord, updateRecord } from '@/desk/actions/records';
 export function BoardView({
   board,
   data,
+  role,
   canWrite,
+  canCreate,
   initialOpenId,
   headerExtra,
 }: {
   board: BoardKey;
   data: DeskData;
+  role: DeskRole;
   canWrite: boolean;
+  canCreate: boolean;
   initialOpenId?: string;
   headerExtra?: React.ReactNode;
 }) {
@@ -131,7 +135,7 @@ export function BoardView({
         </label>
         <span className="flex-1" />
         {headerExtra}
-        {canWrite && (
+        {canCreate && (
           <Button size="sm" onClick={newRecord}>
             New {B.singular.toLowerCase()}
           </Button>
@@ -150,6 +154,7 @@ export function BoardView({
           record={openRow}
           data={data}
           users={data.users}
+          role={role}
           canWrite={canWrite}
           onClose={() => setOpen(null)}
           onOpen={openRecord}

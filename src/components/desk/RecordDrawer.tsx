@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 import { IconAlert } from '@/components/ui/icons';
 import { BOARDS, type Field } from '@/desk/boards';
-import type { BoardKey } from '@/desk/roles';
+import { canCreateChild, canDeleteBoard, type BoardKey, type DeskRole } from '@/desk/roles';
 import { centsToDollars, dollarsToCents } from '@/desk/format';
 import { recordWarnings, type DeskData } from '@/desk/insights';
 import { OptionChip } from './ui';
@@ -24,6 +24,7 @@ export function RecordDrawer({
   record,
   data,
   users,
+  role,
   canWrite,
   onClose,
   onOpen,
@@ -31,7 +32,8 @@ export function RecordDrawer({
   board: BoardKey;
   record: Rec;
   data: DeskData;
-  users: { id: string; name: string | null; email: string }[];
+  users: { id: string; name: string | null; email: string; role?: string }[];
+  role: DeskRole;
   canWrite: boolean;
   onClose: () => void;
   onOpen: (t: OpenTarget) => void;
@@ -85,7 +87,7 @@ export function RecordDrawer({
       title={(record.name as string) || 'Untitled'}
       width="md"
       footer={
-        canWrite ? (
+        canWrite && canDeleteBoard(role, board) ? (
           <Button
             variant={armed ? 'destructive' : 'secondary'}
             onClick={() => {
@@ -152,7 +154,7 @@ export function RecordDrawer({
                   {selField && x[selField.k] ? <OptionChip field={selField} value={x[selField.k] as string} /> : null}
                 </div>
               ))}
-              {canWrite && (
+              {canWrite && canCreateChild(role, bk.b) && (
                 <div>
                   <Button size="sm" variant="ghost" onClick={() => addChild(bk.b, bk.k)}>
                     Add {BOARDS[bk.b].singular.toLowerCase()}
@@ -175,6 +177,7 @@ function DeskRow(props: Parameters<typeof DeskField>[0]) {
       </label>
       <div className="min-w-0">
         <DeskField {...props} />
+        {props.field.hint && <p className="mt-1 text-[11.5px] leading-snug text-ink-tertiary">{props.field.hint}</p>}
       </div>
     </>
   );
@@ -196,7 +199,7 @@ function DeskField({
   field: Field;
   record: Rec;
   data: DeskData;
-  users: { id: string; name: string | null; email: string }[];
+  users: { id: string; name: string | null; email: string; role?: string }[];
   canWrite: boolean;
   onPatch: (p: Rec) => void;
   onOpen: (t: OpenTarget) => void;
@@ -247,17 +250,23 @@ function DeskField({
           ))}
         </select>
       );
-    case 'person':
+    case 'person': {
+      // Restrict the picker to the field's allowed roles, but always keep the
+      // current assignee selectable even if their role falls outside the list.
+      const allowed = f.pr
+        ? users.filter((u) => u.id === v || !u.role || f.pr!.includes(u.role as DeskRole))
+        : users;
       return (
         <select id={id} defaultValue={(v as string) ?? ''} disabled={dis} onChange={(e) => onPatch({ [f.k]: e.target.value || null })} className={inputCls}>
           <option value="">—</option>
-          {users.map((u) => (
+          {allowed.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name ?? u.email}
             </option>
           ))}
         </select>
       );
+    }
     case 'multi': {
       const arr = Array.isArray(v) ? (v as string[]) : [];
       return (

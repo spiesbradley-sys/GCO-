@@ -59,9 +59,11 @@ export function DeskShell({
         ))}
       </Group>
 
-      <Group label="QofE Lite">
-        <NavItem href="/desk/boards/deals" label="Deal Pipeline" count={counts.deals} active={isActive('/desk/boards/deals')} onNav={() => setOpen(false)} />
-      </Group>
+      {canReadBoard(user.role, 'deals') && (
+        <Group label="QofE Lite">
+          <NavItem href="/desk/boards/deals" label="Deal Pipeline" count={counts.deals} active={isActive('/desk/boards/deals')} onNav={() => setOpen(false)} />
+        </Group>
+      )}
 
       {canReadBoard(user.role, 'pnl') && (
         <Group label="Commercials">
