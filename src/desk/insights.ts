@@ -122,6 +122,7 @@ export type MyDayItem = {
   chipText?: string;
   chipTone?: 'danger' | 'warning' | 'neutral';
   action?: MyDayAction;
+  who?: string; // whose item this is, in a team/role roll-up view
 };
 export type MyDay = {
   name: string;
@@ -229,6 +230,37 @@ export function myDay(data: DeskData, viewer: { id: string; name: string | null;
     queries,
     thisWeek,
   };
+}
+
+/** Combined My Day across several people (a whole role, for a department head).
+ * Each item is tagged with whose it is. */
+export function myDayForMembers(
+  data: DeskData,
+  members: { id: string; name: string | null; email: string }[],
+  label: string,
+): MyDay {
+  const merged: MyDay = {
+    name: label,
+    counts: { dueToday: 0, overdue: 0, queries: 0, inFlight: 0 },
+    dueAndOverdue: [],
+    waiting: [],
+    queries: [],
+    thisWeek: [],
+  };
+  for (const m of members) {
+    const d = myDay(data, m);
+    const who = (m.name || m.email).split(' ')[0] || (m.name ?? m.email);
+    const tag = (items: MyDayItem[]) => items.map((i) => ({ ...i, who }));
+    merged.dueAndOverdue.push(...tag(d.dueAndOverdue));
+    merged.waiting.push(...tag(d.waiting));
+    merged.queries.push(...tag(d.queries));
+    merged.thisWeek.push(...tag(d.thisWeek));
+    merged.counts.dueToday += d.counts.dueToday;
+    merged.counts.overdue += d.counts.overdue;
+    merged.counts.queries += d.counts.queries;
+    merged.counts.inFlight += d.counts.inFlight;
+  }
+  return merged;
 }
 
 // ── Dashboard aggregation ─────────────────────────────────────────────────────

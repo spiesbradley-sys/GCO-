@@ -100,6 +100,12 @@ export const CHILD_LINK: Partial<Record<BoardKey, { parentBoard: BoardKey; fk: s
   deliverables: { parentBoard: 'cycles', fk: 'cycle' },
 };
 
+/** Can this role view other people's (and whole roles') personal day? The admin
+ * (owner) and department heads (management) oversee everyone's workload. */
+export function canViewAnyDay(role: DeskRole): boolean {
+  return role === 'owner' || role === 'management';
+}
+
 /** General capability check. */
 export function can(role: DeskRole, action: DeskAction): boolean {
   switch (action) {
