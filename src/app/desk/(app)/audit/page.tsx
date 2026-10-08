@@ -14,6 +14,8 @@ const ACTION_LABEL: Record<string, string> = {
   deactivated: 'Deactivated user',
   reactivated: 'Reactivated user',
   record_created: 'Created',
+  comment_added: 'Commented',
+  comment_deleted: 'Comment deleted',
   record_updated: 'Updated',
   record_deleted: 'Deleted',
   intake_link_generated: 'Onboarding link',

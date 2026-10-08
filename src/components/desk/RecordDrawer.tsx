@@ -13,6 +13,7 @@ import { canCreateChild, canDeleteBoard, type BoardKey, type DeskRole } from '@/
 import { centsToDollars, dollarsToCents } from '@/desk/format';
 import { recordWarnings, type DeskData } from '@/desk/insights';
 import { OptionChip } from './ui';
+import { Discussion } from './Discussion';
 import { formatCalc } from './ui';
 import { updateRecord, createRecord, deleteRecord } from '@/desk/actions/records';
 import type { Rec } from '@/desk/compute';
@@ -186,6 +187,8 @@ export function RecordDrawer({
             </div>
           );
         })}
+
+        <Discussion board={board} recordId={record.id as string} users={users} role={role} />
       </div>
     </Drawer>
   );

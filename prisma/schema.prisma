@@ -714,6 +714,22 @@ model DeskAuditLog {
   @@map("desk_audit_log")
 }
 
+/// A discussion comment on any desk board row. Polymorphic by (board, recordId),
+/// like the audit log, so every board shares one thread model. Comments are never
+/// edited; the author (or the owner) may delete.
+model DeskComment {
+  id          String   @id @default(cuid())
+  board       String
+  recordId    String
+  authorId    String
+  authorEmail String
+  body        String   @db.Text
+  createdAt   DateTime @default(now())
+
+  @@index([board, recordId, createdAt])
+  @@map("desk_comments")
+}
+
 // ── Boards (field key == column name; see src/desk/boards.ts for the config) ──
 
 model DeskIntake {
