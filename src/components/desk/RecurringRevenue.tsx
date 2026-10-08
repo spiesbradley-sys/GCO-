@@ -5,26 +5,26 @@ import type { RecurringRevenue as RRData } from '@/desk/insights';
 const m = (c: number) => '$' + Math.round(c / 100).toLocaleString('en-US');
 
 export function RecurringRevenue({ data }: { data: RRData }) {
-  const { rows, liveCents, pilotCents, pausedCents, activeCount } = data;
+  const { rows, liveCents, startingCents, inactiveCents, activeCount } = data;
   return (
     <div className="flex flex-col gap-5">
       <div>
         <span className="eyebrow">Commercials</span>
         <h1 className="font-heading text-page-title text-ink">Recurring revenue</h1>
         <p className="max-w-2xl text-[15px] text-ink-secondary">
-          One row per managed-accounting client, by monthly fee. This is the live monthly recurring revenue the Overview uses — the P&amp;L stays as the month-by-month actuals.
+          One row per recurring client, by monthly fee. Live MRR is what the Overview uses — it counts each client once, instead of summing the month-by-month P&amp;L rows.
         </p>
       </div>
 
       <div className="flex flex-wrap gap-x-8 gap-y-3 border-b border-border-subtle pb-4">
         <Stat value={`${m(liveCents)}/mo`} label={`Live MRR · ${activeCount} active`} />
         <Stat value={m(liveCents * 12)} label="Annual run-rate" divide />
-        {pilotCents > 0 && <Stat value={`${m(pilotCents)}/mo`} label="In pilot" divide />}
-        {pausedCents > 0 && <Stat value={`${m(pausedCents)}/mo`} label="Paused" divide />}
+        {startingCents > 0 && <Stat value={`${m(startingCents)}/mo`} label="Starting soon" divide />}
+        {inactiveCents > 0 && <Stat value={`${m(inactiveCents)}/mo`} label="Inactive" divide />}
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-[13.5px] text-ink-tertiary">No managed-accounting engagements yet. Add one (service “Managed Bookkeeping”) and it appears here.</p>
+        <p className="text-[13.5px] text-ink-tertiary">No recurring clients yet. Recurring (monthly) rows in the P&amp;L appear here, one per client.</p>
       ) : (
         <div className="overflow-hidden rounded-card border border-border-subtle bg-surface-card">
           <div className="overflow-x-auto">
@@ -32,7 +32,7 @@ export function RecurringRevenue({ data }: { data: RRData }) {
               <thead>
                 <tr className="bg-surface-sunken">
                   <Th>Client</Th>
-                  <Th>Engagement</Th>
+                  <Th>Service</Th>
                   <Th>Status</Th>
                   <Th right>Monthly fee</Th>
                   <Th right>Annual run-rate</Th>
@@ -41,12 +41,12 @@ export function RecurringRevenue({ data }: { data: RRData }) {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id} className="border-b border-border-subtle hover:bg-surface-cream">
-                    <td className="px-4 py-2.5 font-semibold text-ink">{r.client || '—'}</td>
-                    <td className="px-4 py-2.5">
-                      <Link href={`/desk/boards/engagements?open=${r.id}`} className="text-ink hover:text-accent-secondary">
-                        {r.name}
+                    <td className="px-4 py-2.5 font-semibold text-ink">
+                      <Link href={`/desk/boards/pnl?open=${r.id}`} className="text-ink hover:text-accent-secondary">
+                        {r.client}
                       </Link>
                     </td>
+                    <td className="px-4 py-2.5 text-ink-secondary">{r.service || '—'}</td>
                     <td className="px-4 py-2.5">
                       <StatusChip status={r.status} />
                     </td>
@@ -93,9 +93,9 @@ function StatusChip({ status }: { status: string }) {
   const tone =
     status === 'Active'
       ? 'bg-favorable-tint text-favorable'
-      : status === 'Pilot'
+      : status === 'Yet to start'
         ? 'bg-watch-tint text-watch'
-        : status === 'Paused'
+        : status === 'Inactive'
           ? 'bg-unfavorable-tint text-unfavorable'
           : 'bg-surface-sunken text-ink-tertiary';
   return <span className={cn('inline-flex rounded-pill px-2.5 py-0.5 text-[12px] font-semibold', tone)}>{status || '—'}</span>;
