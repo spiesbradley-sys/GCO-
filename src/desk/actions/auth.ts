@@ -1,6 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '@/lib/desk/password';
@@ -9,15 +8,9 @@ import { createDeskSession, destroyCurrentDeskSession, revokeAllSessions } from 
 import { recordDeskAudit } from '@/lib/desk/audit';
 import { rateLimit, clientKey } from '@/lib/desk/ratelimit';
 import { deliverDeskEmail } from '@/lib/desk/email';
+import { deskBaseUrl } from '@/lib/desk/url';
 
 type Result = { ok: boolean; error?: string; message?: string };
-
-function baseUrl(): string {
-  const h = headers();
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const host = h.get('host') ?? 'localhost:3000';
-  return `${proto}://${host}`;
-}
 
 // ── Login ────────────────────────────────────────────────────────────────────
 const loginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
@@ -125,7 +118,7 @@ export async function deskRequestReset(input: { email: string }): Promise<Result
     await prisma.deskPasswordReset.create({
       data: { userId: user.id, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + 60 * 60 * 1000) },
     });
-    await deliverDeskEmail(email, 'Reset your GCO Service Desk password', `${baseUrl()}/desk/set-password?kind=reset&token=${token}`, 'reset');
+    await deliverDeskEmail(email, 'Reset your GCO Service Desk password', `${deskBaseUrl()}/desk/set-password?kind=reset&token=${token}`, 'reset');
   }
   return IDENTICAL;
 }

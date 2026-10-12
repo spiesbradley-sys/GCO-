@@ -1,12 +1,12 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireDeskUserAction } from '@/lib/desk/auth';
 import { delegate, canTouchRecord } from '@/lib/desk/db';
 import { recordDeskAudit } from '@/lib/desk/audit';
 import { deliverCommentEmail } from '@/lib/desk/email';
+import { deskBaseUrl } from '@/lib/desk/url';
 import { BOARDS } from '@/desk/boards';
 import { canReadBoard, scopesToAssignedEngagements, type BoardKey, type DeskRole } from '@/desk/roles';
 
@@ -105,12 +105,10 @@ async function notifyTeam(c: {
 }) {
   try {
     const people = await prisma.deskUser.findMany({
-      where: { isActive: true, role: { in: NOTIFY_ROLES }, NOT: { id: c.author.id }, passwordHash: { not: null } },
+      where: { isActive: true, role: { in: NOTIFY_ROLES }, NOT: { id: c.author.id } },
       select: { id: true, email: true, role: true },
     });
-    const h = headers();
-    const base = `${h.get('x-forwarded-proto') ?? 'http'}://${h.get('host') ?? 'localhost:3000'}`;
-    const link = `${base}/desk/boards/${c.board}?open=${encodeURIComponent(c.recordId)}`;
+    const link = `${deskBaseUrl()}/desk/boards/${c.board}?open=${encodeURIComponent(c.recordId)}`;
     const eligible: typeof people = [];
     for (const p of people) {
       if (await canAccess({ id: p.id, role: p.role as DeskRole }, c.board, c.recordId)) eligible.push(p);

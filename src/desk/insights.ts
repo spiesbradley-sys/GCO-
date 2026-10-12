@@ -112,6 +112,27 @@ export function attention(data: DeskData): Attn[] {
   return out.sort((a, b) => rank[a.sev] - rank[b.sev]);
 }
 
+// ── Cycle review gates ────────────────────────────────────────────────────────
+/** Which review is currently pending on a cycle, and who owns it. Mirrors the
+ * "waiting on you" rules in myDay. Pure, so the record actions can diff it
+ * across an edit and notify only when a gate newly opens. */
+export type ReviewGate = 'capture' | 'bk-review' | 'ctrl-review';
+export const REVIEW_OWNER: Record<ReviewGate, 'accountant' | 'controller'> = {
+  capture: 'accountant',
+  'bk-review': 'accountant',
+  'ctrl-review': 'controller',
+};
+
+export function pendingCycleReviews(cycle: Rec): ReviewGate[] {
+  const stage = (cycle.stage as string) || '';
+  if (CYCLE_DONE.includes(stage)) return [];
+  const out: ReviewGate[] = [];
+  if (!cycle.capture && stage !== 'Awaiting Close') out.push('capture');
+  else if (cycle.capture && !cycle.bkReview) out.push('bk-review');
+  if (!cycle.ctrlReview && ['Review', 'Dashboard Prep'].includes(stage)) out.push('ctrl-review');
+  return out;
+}
+
 // ── My Day (personal to-do dashboard) ─────────────────────────────────────────
 export type MyDayAction = 'review-capture' | 'review-bk' | 'review-ctrl' | 'open-cycle' | 'resolve-query';
 export type MyDayItem = {

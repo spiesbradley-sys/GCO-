@@ -1,6 +1,5 @@
 'use server';
 
-import { headers } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
@@ -9,16 +8,10 @@ import { newToken, hashToken } from '@/lib/desk/tokens';
 import { revokeAllSessions } from '@/lib/desk/session';
 import { recordDeskAudit } from '@/lib/desk/audit';
 import { deliverDeskEmail } from '@/lib/desk/email';
+import { deskBaseUrl } from '@/lib/desk/url';
 import { DESK_ROLES, type DeskRole } from '@/desk/roles';
 
 type Result = { ok: boolean; error?: string; link?: string };
-
-function baseUrl(): string {
-  const h = headers();
-  const proto = h.get('x-forwarded-proto') ?? 'http';
-  const host = h.get('host') ?? 'localhost:3000';
-  return `${proto}://${host}`;
-}
 
 async function requireOwner() {
   const me = await requireDeskUserAction();
@@ -57,7 +50,7 @@ export async function inviteUser(input: { email: string; role: DeskRole }): Prom
       expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000),
     },
   });
-  const link = `${baseUrl()}/desk/set-password?kind=invite&token=${token}`;
+  const link = `${deskBaseUrl()}/desk/set-password?kind=invite&token=${token}`;
   await deliverDeskEmail(email, 'You are invited to the GCO Service Desk', link);
   await recordDeskAudit({ action: 'invite_sent', actorId: me.id, actorEmail: me.email, summary: `${email} as ${parsed.data.role}` });
   revalidatePath('/desk/team');
@@ -78,7 +71,7 @@ export async function resendInvite(input: { inviteId: string }): Promise<Result>
     where: { id: invite.id },
     data: { tokenHash: hashToken(token), revokedAt: null, expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000) },
   });
-  const link = `${baseUrl()}/desk/set-password?kind=invite&token=${token}`;
+  const link = `${deskBaseUrl()}/desk/set-password?kind=invite&token=${token}`;
   await deliverDeskEmail(invite.email, 'Your GCO Service Desk invite', link);
   await recordDeskAudit({ action: 'invite_resent', actorId: me.id, actorEmail: me.email, summary: invite.email });
   revalidatePath('/desk/team');

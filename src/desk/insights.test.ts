@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { attention, recordWarnings, type DeskData } from './insights';
+import { attention, recordWarnings, pendingCycleReviews, type DeskData } from './insights';
 
 const empty: DeskData = { intake: [], clients: [], engagements: [], cycles: [], queries: [], deliverables: [], deals: [], pnl: [], users: [] };
+
+describe('pendingCycleReviews', () => {
+  it('waits on the accountant to capture once the month is being closed', () => {
+    expect(pendingCycleReviews({ stage: 'Capture', capture: false })).toEqual(['capture']);
+  });
+  it('does not expect capture while still Awaiting Close', () => {
+    expect(pendingCycleReviews({ stage: 'Awaiting Close', capture: false })).toEqual([]);
+  });
+  it('moves to bookkeeper review once capture is done', () => {
+    expect(pendingCycleReviews({ stage: 'Reconciliation', capture: true, bkReview: false })).toEqual(['bk-review']);
+  });
+  it('adds controller review at the Review stage', () => {
+    expect(pendingCycleReviews({ stage: 'Review', capture: true, bkReview: true, ctrlReview: false })).toEqual(['ctrl-review']);
+  });
+  it('is empty once the cycle is delivered/closed', () => {
+    expect(pendingCycleReviews({ stage: 'Delivered', capture: false, ctrlReview: false })).toEqual([]);
+  });
+});
 
 describe('attention', () => {
   it('flags a breached cycle as bad', () => {

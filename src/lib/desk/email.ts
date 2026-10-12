@@ -5,7 +5,7 @@ import 'server-only';
 // for invites, shown to the owner in the Team screen). Swapping providers only
 // touches this file.
 
-function emailHtml(heading: string, intro: string, link: string): string {
+function emailHtml(heading: string, intro: string, link: string, cta = 'Open the link'): string {
   return `<!doctype html><html><body style="margin:0;background:#f2f2f2;font-family:'Open Sans',Arial,sans-serif;color:#251c1a">
   <div style="max-width:480px;margin:0 auto;padding:32px 16px">
     <div style="font-family:Montserrat,Arial,sans-serif;font-weight:800;color:#9c7804;font-size:18px;margin-bottom:4px">GCO Partners</div>
@@ -13,10 +13,10 @@ function emailHtml(heading: string, intro: string, link: string): string {
     <div style="background:#ffffff;border-radius:12px;padding:28px">
       <h1 style="font-family:Montserrat,Arial,sans-serif;font-size:20px;margin:0 0 10px">${heading}</h1>
       <p style="font-size:15px;line-height:1.5;color:#5c5250;margin:0 0 20px">${intro}</p>
-      <a href="${link}" style="display:inline-block;background:#9c7804;color:#ffffff;text-decoration:none;font-family:Montserrat,Arial,sans-serif;font-weight:700;font-size:15px;padding:11px 20px;border-radius:999px">Open the link</a>
+      <a href="${link}" style="display:inline-block;background:#9c7804;color:#ffffff;text-decoration:none;font-family:Montserrat,Arial,sans-serif;font-weight:700;font-size:15px;padding:11px 20px;border-radius:999px">${cta}</a>
       <p style="font-size:12.5px;color:#6f6a62;margin:20px 0 0;word-break:break-all">Or paste this into your browser:<br>${link}</p>
     </div>
-    <p style="color:#6f6a62;font-size:12px;margin-top:20px">If you weren't expecting this, you can ignore it.</p>
+    <p style="color:#6f6a62;font-size:12px;margin-top:20px">You're receiving this because you're on the GCO Service Desk.</p>
   </div></body></html>`;
 }
 
@@ -49,6 +49,81 @@ export async function deliverDeskEmail(to: string, subject: string, link: string
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Generic desk notification email (assignment, new cycle, query, review…).
+ * Shares the invite/reset template. Never throws. */
+export async function deliverDeskNotificationEmail(
+  to: string,
+  opts: { subject: string; heading: string; intro: string; link: string; cta?: string },
+): Promise<void> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.log(`\n[desk-email] To: ${to}\n[desk-email] Subject: ${opts.subject}\n[desk-email] Link: ${opts.link}\n`);
+    return;
+  }
+  const from = process.env.DESK_EMAIL_FROM || 'GCO Service Desk <onboarding@resend.dev>';
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject: opts.subject, html: emailHtml(opts.heading, opts.intro, opts.link, opts.cta ?? 'Open the desk') }),
+    });
+    if (!res.ok) console.error('[desk-email] Resend failed', res.status, await res.text().catch(() => ''));
+  } catch (err) {
+    console.error('[desk-email] send error', err);
+  }
+}
+
+/** Daily "My Day" digest: a short list of what's on someone's plate. Never throws. */
+export async function deliverDigestEmail(
+  to: string,
+  opts: { name: string; link: string; groups: { label: string; items: string[] }[] },
+): Promise<void> {
+  const subject = 'Your desk — what needs you today';
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    console.log(`\n[desk-email] To: ${to}\n[desk-email] Subject: ${subject}\n[desk-email] Link: ${opts.link}\n`);
+    return;
+  }
+  const from = process.env.DESK_EMAIL_FROM || 'GCO Service Desk <onboarding@resend.dev>';
+  const first = (opts.name || '').split(' ')[0] || opts.name;
+  const groupsHtml = opts.groups
+    .filter((g) => g.items.length)
+    .map(
+      (g) => `<div style="margin:0 0 18px">
+        <div style="font-family:Montserrat,Arial,sans-serif;font-weight:700;font-size:13px;color:#9c7804;text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px">${esc(g.label)}</div>
+        ${g.items
+          .map(
+            (it) =>
+              `<div style="font-size:14px;line-height:1.45;color:#251c1a;padding:8px 12px;background:#f7f5f0;border-radius:8px;margin:0 0 6px">${esc(it)}</div>`,
+          )
+          .join('')}
+      </div>`,
+    )
+    .join('');
+  const html = `<!doctype html><html><body style="margin:0;background:#f2f2f2;font-family:'Open Sans',Arial,sans-serif;color:#251c1a">
+  <div style="max-width:520px;margin:0 auto;padding:32px 16px">
+    <div style="font-family:Montserrat,Arial,sans-serif;font-weight:800;color:#9c7804;font-size:18px;margin-bottom:4px">GCO Partners</div>
+    <div style="color:#6f6a62;font-size:13px;margin-bottom:24px">Service Desk</div>
+    <div style="background:#ffffff;border-radius:12px;padding:28px">
+      <h1 style="font-family:Montserrat,Arial,sans-serif;font-size:20px;margin:0 0 6px">Good morning, ${esc(first)}</h1>
+      <p style="font-size:14px;line-height:1.5;color:#6f6a62;margin:0 0 20px">Here's what's waiting on you today.</p>
+      ${groupsHtml}
+      <a href="${opts.link}" style="display:inline-block;margin-top:4px;background:#9c7804;color:#ffffff;text-decoration:none;font-family:Montserrat,Arial,sans-serif;font-weight:700;font-size:15px;padding:11px 20px;border-radius:999px">Open My Day</a>
+    </div>
+    <p style="color:#6f6a62;font-size:12px;margin-top:20px">You only get this on days something needs you.</p>
+  </div></body></html>`;
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from, to, subject, html }),
+    });
+    if (!res.ok) console.error('[desk-email] Resend failed', res.status, await res.text().catch(() => ''));
+  } catch (err) {
+    console.error('[desk-email] send error', err);
+  }
+}
 
 /** Notify a desk user of a new comment on a row. Never throws. */
 export async function deliverCommentEmail(

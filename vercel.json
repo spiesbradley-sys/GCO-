@@ -3,6 +3,10 @@
     {
       "path": "/api/desk/cron/cycles",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/desk/cron/digest",
+      "schedule": "30 6 * * *"
     }
   ]
 }

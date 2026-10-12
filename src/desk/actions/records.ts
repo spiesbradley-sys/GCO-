@@ -17,6 +17,8 @@ import {
   type DeskRole,
 } from '@/desk/roles';
 import { todayISO, monthlyCloseDate } from '@/desk/compute';
+import { pendingCycleReviews, REVIEW_OWNER, type ReviewGate } from '@/desk/insights';
+import { notifyUsers } from '@/lib/desk/notify';
 
 type Result = { ok: boolean; error?: string; id?: string };
 
@@ -74,6 +76,7 @@ export async function createRecord(input: { board: BoardKey; extra?: Record<stri
 
   const row = await delegate(input.board).create({ data });
   await recordDeskAudit({ action: 'record_created', actorId: me.id, actorEmail: me.email, board: input.board, recordId: row.id, summary: row.name });
+  await notifyForCreate(input.board, row, { id: me.id, email: me.email });
   // New engagements pull straight into the P&L as a linked row.
   if (input.board === 'engagements') await syncPnlForEngagement({ id: me.id, email: me.email }, row.id);
   revalidatePath('/desk');
@@ -123,6 +126,7 @@ export async function updateRecord(input: { board: BoardKey; id: string; patch: 
   if (Object.keys(diff).length) {
     await recordDeskAudit({ action: 'record_updated', actorId: me.id, actorEmail: me.email, board: input.board, recordId: input.id, summary: after.name, diff });
   }
+  await notifyForUpdate(input.board, before, after, { id: me.id, email: me.email });
   // Keep the linked P&L row in step with the engagement.
   if (input.board === 'engagements') await syncPnlForEngagement({ id: me.id, email: me.email }, input.id);
   revalidatePath('/desk');
@@ -175,6 +179,82 @@ async function syncPnlForEngagement(actor: { id: string; email: string }, engage
     await recordDeskAudit({ action: 'record_created', actorId: actor.id, actorEmail: actor.email, board: 'pnl', recordId: created.id, summary: `${e.name} (auto-linked from engagement)` });
   }
 }
+
+// ── Event notifications ────────────────────────────────────────────────────────
+// Who gets told what, when a record is created or changed. Each call is fully
+// guarded inside notifyUsers, so a notification failure never fails the write.
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function notifyForCreate(board: BoardKey, row: any, actor: { id: string; email: string }) {
+  if (board === 'cycles' && row.engagement) {
+    const e = await prisma.deskEngagement.findUnique({ where: { id: String(row.engagement) }, select: { bookkeeper: true, controller: true } });
+    await notifyUsers({
+      userIds: [e?.bookkeeper, e?.controller],
+      excludeUserId: actor.id,
+      kind: 'cycle',
+      board: 'cycles',
+      recordId: row.id,
+      title: `New monthly cycle: ${row.name}`,
+      body: `A cycle has been opened for ${row.name}. Capture and close it by the SLA date.`,
+      actorEmail: actor.email,
+    });
+  }
+  if (board === 'queries' && row.owner && row.status !== 'Resolved') {
+    await notifyUsers({
+      userIds: [row.owner],
+      excludeUserId: actor.id,
+      kind: 'query',
+      board: 'queries',
+      recordId: row.id,
+      title: `A query needs you: ${row.name}`,
+      body: `You're the owner of this query. Respond and resolve it to keep the close on track.`,
+      actorEmail: actor.email,
+    });
+  }
+}
+
+async function notifyForUpdate(board: BoardKey, before: any, after: any, actor: { id: string; email: string }) {
+  if (board === 'engagements') {
+    if (after.controller && after.controller !== before.controller) {
+      await notifyUsers({
+        userIds: [after.controller], excludeUserId: actor.id, kind: 'assignment', board: 'engagements', recordId: after.id,
+        title: `You've been assigned to ${after.name}`, body: `You're now the financial controller on ${after.name}.`, actorEmail: actor.email,
+      });
+    }
+    if (after.bookkeeper && after.bookkeeper !== before.bookkeeper) {
+      await notifyUsers({
+        userIds: [after.bookkeeper], excludeUserId: actor.id, kind: 'assignment', board: 'engagements', recordId: after.id,
+        title: `You've been assigned to ${after.name}`, body: `You're now the accountant on ${after.name}.`, actorEmail: actor.email,
+      });
+    }
+  }
+  if (board === 'queries' && after.owner && after.owner !== before.owner && after.status !== 'Resolved') {
+    await notifyUsers({
+      userIds: [after.owner], excludeUserId: actor.id, kind: 'query', board: 'queries', recordId: after.id,
+      title: `A query needs you: ${after.name}`, body: `You've been made the owner of this query. Respond and resolve it.`, actorEmail: actor.email,
+    });
+  }
+  if (board === 'cycles') {
+    const had = new Set(pendingCycleReviews(before));
+    const newly = pendingCycleReviews(after).filter((g) => !had.has(g));
+    if (newly.length) {
+      const e = await prisma.deskEngagement.findUnique({ where: { id: String(after.engagement) }, select: { bookkeeper: true, controller: true } });
+      const label: Record<ReviewGate, string> = {
+        capture: 'Capture is ready for your review',
+        'bk-review': 'Bookkeeper review is due',
+        'ctrl-review': 'Controller review is due',
+      };
+      for (const g of newly) {
+        const userId = REVIEW_OWNER[g] === 'controller' ? e?.controller : e?.bookkeeper;
+        await notifyUsers({
+          userIds: [userId], excludeUserId: actor.id, kind: 'review', board: 'cycles', recordId: after.id,
+          title: `${label[g]}: ${after.name}`, body: `${after.name} is waiting on your review.`, actorEmail: actor.email,
+        });
+      }
+    }
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export async function deleteRecord(input: { board: BoardKey; id: string }): Promise<Result> {
   const me = await requireDeskUserAction();

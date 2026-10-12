@@ -2,6 +2,7 @@ import 'server-only';
 import { prisma } from '@/lib/prisma';
 import { monthlyCloseDate } from '@/desk/compute';
 import { recordDeskAudit } from '@/lib/desk/audit';
+import { notifyUsers } from '@/lib/desk/notify';
 
 // Automatic monthly cycle generation. For every live managed-accounting
 // engagement we make sure a monthly cycle exists — the cron ensures the current
@@ -63,7 +64,7 @@ export async function ensureMonthlyCycles(actor: { id: string; email: string }, 
   const cur = ym(now);
   const engagements = await prisma.deskEngagement.findMany({
     where: { service: 'Managed Bookkeeping', status: { in: ['Active', 'Pilot'] } },
-    select: { id: true, name: true, client: true, start: true },
+    select: { id: true, name: true, client: true, start: true, bookkeeper: true, controller: true },
   });
 
   const created: GeneratedCycle[] = [];
@@ -85,6 +86,15 @@ export async function ensureMonthlyCycles(actor: { id: string; email: string }, 
         data: { name, engagement: e.id, period, stage: 'Awaiting Close', slaDue: monthlyCloseDate(period), createdBy: actor.id, updatedBy: actor.id },
       });
       await recordDeskAudit({ action: 'record_created', actorId: actor.id, actorEmail: actor.email, board: 'cycles', recordId: row.id, summary: `${name} (auto-generated)` });
+      // Tell the engagement's accountant and controller a new month is open.
+      await notifyUsers({
+        userIds: [e.bookkeeper, e.controller],
+        kind: 'cycle',
+        board: 'cycles',
+        recordId: row.id,
+        title: `New monthly cycle: ${name}`,
+        body: `A cycle has been opened for ${name}. Capture and close it by the SLA date (${monthlyCloseDate(period)}).`,
+      });
       created.push({ id: row.id, name, period });
       have.add(mk);
     }
