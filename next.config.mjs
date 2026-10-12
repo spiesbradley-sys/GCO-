@@ -4,6 +4,8 @@ const nextConfig = {
   experimental: {
     // Server Actions are enabled by default in Next 14; typed routes optional.
     typedRoutes: false,
+    // nodemailer uses dynamic requires; keep it external so Next doesn't bundle it.
+    serverComponentsExternalPackages: ['nodemailer'],
   },
 };
 
