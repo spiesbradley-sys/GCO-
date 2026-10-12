@@ -10,16 +10,19 @@ import { BrandLogo } from '@/components/shell/BrandLogo';
 import { MANAGED_ORDER, BOARDS } from '@/desk/boards';
 import { DESK_ROLE_LABEL, canReadBoard, type DeskRole } from '@/desk/roles';
 import { deskLogout } from '@/desk/actions/auth';
+import { NotificationBell } from './NotificationBell';
 
 type Counts = Record<string, number>;
 
 export function DeskShell({
   user,
   counts,
+  unread,
   children,
 }: {
   user: { name: string | null; email: string; role: DeskRole };
   counts: Counts;
+  unread: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -36,11 +39,12 @@ export function DeskShell({
 
   const rail = (
     <nav className="flex h-full w-60 flex-col gap-5 overflow-y-auto border-r border-border-subtle bg-surface-card px-3 py-5" aria-label="Desk">
-      <div className="px-2">
+      <div className="flex items-start justify-between px-2">
         <Link href="/desk" aria-label="GCO Service Desk home" className="flex flex-col items-start gap-1">
           <BrandLogo />
           <span className="text-[12px] text-ink-tertiary">Service Desk</span>
         </Link>
+        <NotificationBell initialUnread={unread} />
       </div>
 
       <Group label="Desk">
@@ -118,6 +122,9 @@ export function DeskShell({
           <button onClick={() => setOpen(true)} className="inline-flex min-h-10 items-center gap-2 rounded-input border border-border-default bg-surface-card px-3 py-2 text-[13px]">
             <IconMenu width={16} height={16} /> Boards
           </button>
+          <span className="ml-auto">
+            <NotificationBell initialUnread={unread} />
+          </span>
         </div>
         <main className="flex-1 overflow-x-hidden px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-content">{children}</div>

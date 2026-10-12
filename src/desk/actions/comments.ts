@@ -72,7 +72,7 @@ export async function addComment(input: { board: BoardKey; id: string; body: str
   const recordName = (record.name as string) || 'Untitled';
   await recordDeskAudit({ action: 'comment_added', actorId: me.id, actorEmail: me.email, board, recordId: id, summary: recordName });
 
-  await notifyTeam({ author: { id: me.id, name: me.name ?? me.email }, board, recordId: id, recordName, body });
+  await notifyTeam({ author: { id: me.id, name: me.name ?? me.email, email: me.email }, board, recordId: id, recordName, body });
 
   return {
     ok: true,
@@ -97,7 +97,7 @@ export async function deleteComment(input: { commentId: string }): Promise<Resul
  * comments only reach roles that can read the P&L.
  */
 async function notifyTeam(c: {
-  author: { id: string; name: string };
+  author: { id: string; name: string; email: string };
   board: BoardKey;
   recordId: string;
   recordName: string;
@@ -115,6 +115,20 @@ async function notifyTeam(c: {
     for (const p of people) {
       if (await canAccess({ id: p.id, role: p.role as DeskRole }, c.board, c.recordId)) eligible.push(p);
     }
+    // In-app first: it must land even if email delivery is unconfigured or fails.
+    await prisma.deskNotification
+      .createMany({
+        data: eligible.map((p) => ({
+          userId: p.id,
+          kind: 'comment',
+          board: c.board,
+          recordId: c.recordId,
+          title: `${c.author.name} commented on ${c.recordName}`,
+          body: c.body.length > 200 ? `${c.body.slice(0, 200)}…` : c.body,
+          actorEmail: c.author.email,
+        })),
+      })
+      .catch((err) => console.error('[desk-comments] in-app notify failed', err));
     await Promise.all(
       eligible.map((p) =>
         deliverCommentEmail(p.email, {

@@ -730,6 +730,24 @@ model DeskComment {
   @@map("desk_comments")
 }
 
+/// In-app notification for a desk user (the notification centre). Created
+/// alongside the email when something needs their attention, e.g. a new comment.
+model DeskNotification {
+  id         String    @id @default(cuid())
+  userId     String
+  kind       String    @default("comment")
+  board      String
+  recordId   String
+  title      String
+  body       String    @db.Text
+  actorEmail String?
+  createdAt  DateTime  @default(now())
+  readAt     DateTime?
+
+  @@index([userId, readAt, createdAt])
+  @@map("desk_notifications")
+}
+
 // ── Boards (field key == column name; see src/desk/boards.ts for the config) ──
 
 model DeskIntake {
