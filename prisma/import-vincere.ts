@@ -59,7 +59,11 @@ async function main() {
     const l = label.toLowerCase();
     const exact = users.filter((u) => (u.name ?? '').trim().toLowerCase() === l);
     if (exact.length === 1) return exact[0].id;
-    const first = users.filter((u) => (u.name ?? '').trim().toLowerCase().split(/\s+/)[0] === l);
+    // Names are often blank on invited users, so also match the first name or the
+    // email's first name ("prosper.chamonyonga@…" -> "prosper").
+    const first = users.filter(
+      (u) => (u.name ?? '').trim().toLowerCase().split(/\s+/)[0] === l || u.email.toLowerCase().split('@')[0].split(/[._-]/)[0] === l,
+    );
     if (first.length === 1) return first[0].id;
     (first.length > 1 ? ambiguous : unmatched).add(label);
     return null;
