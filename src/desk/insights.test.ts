@@ -52,3 +52,26 @@ describe('recordWarnings', () => {
     expect(w.join(' ')).toMatch(/BAA/);
   });
 });
+
+import { myDay } from './insights';
+import { vi, afterEach } from 'vitest';
+describe('quarterly engagements', () => {
+  afterEach(() => vi.useRealTimers());
+  const eng = { id: 'e1', name: 'Q Co', service: 'Managed Bookkeeping', status: 'Active', bookkeeper: 'u1', controller: 'u2', slaDelivery: 5 };
+  const viewer = { id: 'u1', name: 'U', email: 'u@x.co' };
+  it('does not nag "no cycle opened" outside a quarter-end month, but still does for monthly', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-14T12:00:00Z'));
+    const q = { ...empty, engagements: [{ ...eng, frequency: 'Quarterly' }] };
+    const m = { ...empty, engagements: [eng] };
+    expect(myDay(q, viewer).waiting).toHaveLength(0);
+    expect(attention(q).some((a) => a.id === 'e1')).toBe(false);
+    expect(myDay(m, viewer).waiting).toHaveLength(1);
+  });
+  it('does expect the quarterly cycle in a quarter-end month', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-12-02T12:00:00Z'));
+    const q = { ...empty, engagements: [{ ...eng, frequency: 'Quarterly' }] };
+    expect(myDay(q, viewer).waiting).toHaveLength(1);
+  });
+});

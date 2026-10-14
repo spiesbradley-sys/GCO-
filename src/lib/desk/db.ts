@@ -93,6 +93,11 @@ export function scopeDeskData(data: DeskData, viewer: DeskViewer): DeskData {
   const engagements = data.engagements.filter((e) => isAssignedTo(e, viewer.id));
   const engIds = new Set(engagements.map((e) => e.id));
   const clientIds = new Set(engagements.map((e) => e.client).filter(Boolean));
+  // An assigned end client of a white-label client also brings its parent into
+  // view, so the parent's name resolves on the drawer.
+  data.clients.forEach((c) => {
+    if (clientIds.has(c.id) && c.parent) clientIds.add(c.parent);
+  });
   const clients = data.clients.filter((c) => clientIds.has(c.id));
   const intakeIds = new Set(clients.map((c) => c.intake).filter(Boolean));
   const cycles = data.cycles.filter((cy) => engIds.has(cy.engagement));

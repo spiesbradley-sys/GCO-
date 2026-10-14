@@ -19,6 +19,7 @@ import {
 import { todayISO, monthlyCloseDate } from '@/desk/compute';
 import { pendingCycleReviews, REVIEW_OWNER, type ReviewGate } from '@/desk/insights';
 import { notifyUsers } from '@/lib/desk/notify';
+import { closeBdFor } from '@/lib/desk/cycles';
 
 type Result = { ok: boolean; error?: string; id?: string };
 
@@ -71,8 +72,8 @@ export async function createRecord(input: { board: BoardKey; extra?: Record<stri
 
   const data: Record<string, unknown> = { name: 'Untitled', createdBy: me.id, updatedBy: me.id, ...sanitizePatch(input.board, input.extra ?? {}) };
   if (input.board === 'deals' && !data.created) data.created = todayISO();
-  // Accounting close date: 5 business days after the period's month-end.
-  if (input.board === 'cycles' && data.period && !data.slaDue) data.slaDue = monthlyCloseDate(String(data.period));
+  // Accounting close date: 5 business days after the period's month-end (8 for white label).
+  if (input.board === 'cycles' && data.period && !data.slaDue) data.slaDue = monthlyCloseDate(String(data.period), await closeBdFor(data.engagement));
 
   const row = await delegate(input.board).create({ data });
   await recordDeskAudit({ action: 'record_created', actorId: me.id, actorEmail: me.email, board: input.board, recordId: row.id, summary: row.name });
@@ -116,7 +117,7 @@ export async function updateRecord(input: { board: BoardKey; id: string; patch: 
   // Re-derive the close date when the period changes (5 BD after month-end),
   // unless the SLA due date is being set explicitly in the same edit.
   if (input.board === 'cycles' && 'period' in patch && patch.period && !('slaDue' in patch)) {
-    patch.slaDue = monthlyCloseDate(String(patch.period));
+    patch.slaDue = monthlyCloseDate(String(patch.period), await closeBdFor(patch.engagement ?? before.engagement));
   }
 
   patch.updatedBy = me.id;

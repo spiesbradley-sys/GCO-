@@ -106,6 +106,13 @@ export function canViewAnyDay(role: DeskRole): boolean {
   return role === 'owner' || role === 'management';
 }
 
+/** How much of the utilization report a role sees: only their own load, their
+ * own plus the accountants on their engagements, or everyone. */
+export function utilizationScope(role: DeskRole): 'self' | 'team' | 'all' {
+  if (role === 'owner' || role === 'management') return 'all';
+  return role === 'controller' ? 'team' : 'self';
+}
+
 /** General capability check. */
 export function can(role: DeskRole, action: DeskAction): boolean {
   switch (action) {

@@ -52,6 +52,55 @@ export function monthlyCloseDate(periodISO: string, bd: number = CLOSE_SLA_BD): 
   return eom ? addBusinessDays(eom, bd) : '';
 }
 
+/** White-label clients (we do the work for THEIR clients) close on the 8th
+ * business day of the following month, not the 5th. */
+export const WHITE_LABEL_CLOSE_BD = 8;
+
+export type Frequency = 'Monthly' | 'Quarterly';
+
+/** An engagement's cycle frequency; blank means Monthly. */
+export function frequencyOf(engagement: Rec): Frequency {
+  return engagement.frequency === 'Quarterly' ? 'Quarterly' : 'Monthly';
+}
+
+/** Is 'YYYY-MM' a month a cycle is closed for? Always for Monthly; for
+ * Quarterly only the quarter-end months (Mar, Jun, Sep, Dec). */
+export function isCloseMonth(freq: Frequency, monthKey: string): boolean {
+  if (freq === 'Monthly') return true;
+  const m = Number(monthKey.slice(5, 7));
+  return m > 0 && m % 3 === 0;
+}
+
+/** Every close month from startKey to endKey inclusive ('YYYY-MM'), for the frequency. */
+export function closeMonthsBetween(freq: Frequency, startKey: string, endKey: string): string[] {
+  const out: string[] = [];
+  let [y, m] = startKey.split('-').map(Number);
+  const [ey, em] = endKey.split('-').map(Number);
+  let guard = 0;
+  while ((y < ey || (y === ey && m <= em)) && guard++ < 240) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    if (isCloseMonth(freq, key)) out.push(key);
+    if (++m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
+}
+
+/** Cycle label for a close month: "Sep 2026" (monthly) or "Q3 2026" (quarterly). */
+export function periodLabel(freq: Frequency, monthKey: string): string {
+  const [y, m] = monthKey.split('-').map(Number);
+  if (freq === 'Quarterly') return `Q${Math.ceil(m / 3)} ${y}`;
+  return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+}
+
+/** Should this engagement have a cycle open right now? Monthly: always. Quarterly:
+ * only during a quarter-end month, so it doesn't nag the other two months. */
+export function needsCycleNow(engagement: Rec, today = todayISO()): boolean {
+  return isCloseMonth(frequencyOf(engagement), today.slice(0, 7));
+}
+
 /**
  * Business days between two ISO dates ('YYYY-MM-DD'), excluding Sat/Sun.
  * Signed: negative when b is before a. Mirrors the reference `bdays`.

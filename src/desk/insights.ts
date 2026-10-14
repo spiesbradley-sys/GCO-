@@ -8,6 +8,7 @@ import {
   cycleSev,
   dealClockUsed,
   margin,
+  needsCycleNow,
   openBlockers,
   rack,
   todayISO,
@@ -95,7 +96,7 @@ export function attention(data: DeskData): Attn[] {
     .filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot'].includes(e.status as string) && (e.slaDelivery == null || e.slaDelivery === ''))
     .forEach((e) => out.push({ sev: 'warn', b: 'engagements', id: e.id as string, t: e.name as string, d: 'Active managed engagement with no SLA terms set.' }));
   (data.engagements as Rec[])
-    .filter((e) => e.service === 'Managed Bookkeeping' && e.status === 'Active' && !(data.cycles as Rec[]).some((c) => c.engagement === e.id))
+    .filter((e) => e.service === 'Managed Bookkeeping' && e.status === 'Active' && needsCycleNow(e, t) && !(data.cycles as Rec[]).some((c) => c.engagement === e.id))
     .forEach((e) => out.push({ sev: 'info', b: 'engagements', id: e.id as string, t: e.name as string, d: 'Active, but no monthly cycle has been opened yet.' }));
   (data.deals as Rec[])
     .filter((d) => DEAL_DONE.includes(d.stage as string) && d.payment !== 'Paid')
@@ -202,7 +203,7 @@ export function myDay(data: DeskData, viewer: { id: string; name: string | null;
     }
   });
   mine
-    .filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot'].includes(e.status as string))
+    .filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot'].includes(e.status as string) && needsCycleNow(e, t))
     .filter((e) => !(data.cycles as Rec[]).some((c) => c.engagement === e.id && c.stage !== 'Closed'))
     .forEach((e) => waiting.push({ b: 'engagements', id: e.id as string, title: e.name as string, sub: `${partyOf(e.id)} · no cycle opened yet`, action: 'open-cycle' }));
 
@@ -386,7 +387,7 @@ export function deskDashboard(data: DeskData) {
     .filter((x) => x.n <= 10)
     .sort((a, b) => a.n - b.n);
   const activeMB = E.filter((e) => e.service === 'Managed Bookkeeping' && ['Active', 'Pilot'].includes(e.status as string));
-  const noCycle = activeMB.filter((e) => !C.some((c) => c.engagement === e.id && c.stage !== 'Closed'));
+  const noCycle = activeMB.filter((e) => needsCycleNow(e, t) && !C.some((c) => c.engagement === e.id && c.stage !== 'Closed'));
 
   const fmtMoney = (c: number) => '$' + Math.round(c / 100).toLocaleString('en-US');
 

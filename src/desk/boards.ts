@@ -165,6 +165,8 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'system', l: 'Accounting System', t: 'select', o: o([['QuickBooks Online', 'blue'], ['Xero', 'green'], ['Other']]) },
       { k: 'bank', l: 'Bank Feed Health', t: 'select', o: o([['Connected', 'green'], ['Issue', 'red'], ['Not set up']]) },
       { k: 'letter', l: 'Engagement Letter Signed', t: 'check' },
+      { k: 'whiteLabel', l: 'White label', t: 'check', lock: ['controller', 'management', 'owner'], hint: 'Tick for a client we work for on behalf of THEIR clients (e.g. Vincere). Add those end clients from its drawer.' },
+      { k: 'parent', l: 'White-label parent', t: 'rel', to: 'clients', lock: ['controller', 'management', 'owner'], hint: 'Set on an end client of a white-label client (e.g. a Vincere customer). Leave blank for ordinary clients.' },
       { k: 'fee', l: 'Monthly Fee', t: 'money' },
       { k: 'start', l: 'Start Date', t: 'date' },
       {
@@ -183,7 +185,10 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'intake', l: 'Onboarding Form', t: 'rel', to: 'intake' },
       { k: 'notes', l: 'Notes', t: 'long' },
     ],
-    back: [{ b: 'engagements', k: 'client', l: 'Engagements' }],
+    back: [
+      { b: 'clients', k: 'parent', l: 'End clients (white label)' },
+      { b: 'engagements', k: 'client', l: 'Engagements' },
+    ],
     views: [
       { n: 'All clients', type: 'table', cols: ['name', 'status', 'onboarding', 'access', 'system', 'bank', 'letter', 'fee'] },
       { n: 'By status', type: 'board', group: 'status', cardMeta: ['access', 'fee'] },
@@ -207,6 +212,8 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'slaDelivery', l: 'SLA: Delivery (BD from close)', t: 'num' },
       { k: 'slaMeeting', l: 'SLA: Meeting (BD from delivery)', t: 'num' },
       { k: 'slaQuery', l: 'SLA: Query response (BD)', t: 'num' },
+      { k: 'frequency', l: 'Delivery Frequency', t: 'select', o: o([['Monthly', 'green'], ['Quarterly', 'purple']]), lock: ['controller', 'management', 'owner'], hint: 'Blank = Monthly. Quarterly engagements get one cycle per quarter (Mar, Jun, Sep, Dec).' },
+      { k: 'capacity', l: 'Capacity (load points)', t: 'num', lock: ['controller', 'management', 'owner'], hint: 'Monthly workload this engagement puts on each assigned person. Blank = default. A standard managed engagement is about 5; a white-label end client about 1.' },
       { k: 'controller', l: 'Financial Controller', t: 'person', pr: ['controller', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'Sees this engagement; controllers see all. Set by controllers/management.' },
       { k: 'bookkeeper', l: 'Accountant', t: 'person', pr: ['accountant', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'The assigned accountant sees only engagements assigned to them. Set by controllers/management.' },
       { k: 'start', l: 'Start Date', t: 'date' },
@@ -216,7 +223,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     ],
     back: [{ b: 'cycles', k: 'engagement', l: 'Monthly Cycles' }],
     views: [
-      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'service', 'status', 'fee', 'slaDelivery', 'bookkeeper'] },
+      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'service', 'status', 'frequency', 'fee', 'slaDelivery', 'bookkeeper'] },
       { n: 'By service', type: 'board', group: 'service', cardMeta: ['status', 'fee'] },
     ],
   },
@@ -228,7 +235,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     step: 4,
     singular: 'Cycle',
     blurb:
-      'The production line. One record per engagement per month, moving through eight stages, each with its own SLA clock.',
+      'The production line. One record per engagement per close period (every month, or each quarter for quarterly engagements), moving through eight stages, each with its own SLA clock.',
     fields: [
       { k: 'name', l: 'Cycle', t: 'title' },
       { k: 'engagement', l: 'Engagement', t: 'rel', to: 'engagements' },
@@ -251,7 +258,7 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'capture', l: 'Claude Capture Done', t: 'check' },
       { k: 'bkReview', l: 'Bookkeeper Review Done', t: 'check' },
       { k: 'ctrlReview', l: 'Controller Review Done', t: 'check' },
-      { k: 'slaDue', l: 'Close date (SLA)', t: 'date', hint: 'Auto: 5 business days after month-end. Override only for exceptions.' },
+      { k: 'slaDue', l: 'Close date (SLA)', t: 'date', hint: 'Auto: 5 business days after month-end (8 for white-label clients). Override only for exceptions.' },
       { k: 'slaStatus', l: 'SLA Status', t: 'select', o: o([['On track', 'green'], ['At risk', 'yellow'], ['Breached', 'red'], ['Clock paused'], ['Met', 'blue']]) },
       { k: 'blockers', l: 'Open Blockers', t: 'calc', calc: 'blockers', num: true },
       { k: 'delivered', l: 'Delivered On', t: 'date' },

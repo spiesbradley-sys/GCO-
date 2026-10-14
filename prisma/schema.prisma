@@ -790,6 +790,12 @@ model DeskClient {
   letter      Boolean  @default(false)
   fee         Int? // cents
   start       String? // YYYY-MM-DD
+  /// White-label client (e.g. Vincere): we do the work for THEIR clients, so it
+  /// carries many end-client engagements. Drives utilization grouping/defaults.
+  whiteLabel  Boolean  @default(false)
+  /// End client of a white-label client: DeskClient.id of the parent (e.g. a
+  /// Vincere customer -> Vincere). Null for ordinary and top-level clients.
+  parent      String?
   streams     String[] @default([])
   intake      String?  @unique // FK -> DeskIntake.id (1:1)
   notes       String?
@@ -817,6 +823,12 @@ model DeskEngagement {
   slaDelivery Int?
   slaMeeting  Int?
   slaQuery    Int?
+  /// Monthly load this engagement puts on each assigned person, in utilization
+  /// points. Null = use the default weights (see src/desk/utilization.ts).
+  capacity    Int?
+  /// How often a cycle is closed: "Monthly" (default when null) or "Quarterly"
+  /// (one cycle per quarter-end month — Mar, Jun, Sep, Dec).
+  frequency   String?
   controller  String? // DeskUser.id
   bookkeeper  String? // DeskUser.id
   start       String?
