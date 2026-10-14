@@ -46,7 +46,7 @@ function WhiteLabelGroup({ g, canEdit }: { g: UtilGroup; canEdit: boolean }) {
           <span className="mr-1.5 inline-block w-3 text-ink-tertiary">{open ? '▾' : '▸'}</span>
           <span className="font-semibold text-ink">{g.label}</span>
           <span className="ml-2 rounded-pill bg-surface-sunken px-2 py-0.5 text-[11.5px] font-semibold text-ink-secondary">
-            White label · {g.lines.length} end client{g.lines.length === 1 ? '' : 's'}
+            White label · {g.lines.length} engagement{g.lines.length === 1 ? '' : 's'} for their clients
           </span>
         </span>
         <span className="hidden text-right text-[12.5px] text-ink-tertiary sm:block">{g.lines.reduce((a, l) => a + l.baseline, 0)}</span>
@@ -99,9 +99,9 @@ function Line({ l, canEdit, nested }: { l: UtilLine; canEdit: boolean; nested?: 
   return (
     <div className={cn('grid grid-cols-[minmax(0,1fr)_auto_64px] items-center gap-3 py-2 sm:grid-cols-[minmax(0,1fr)_96px_64px]', !nested && 'border-t border-border-subtle')}>
       <Link href={`/desk/boards/engagements?open=${l.id}`} className="min-w-0 hover:[&_.t]:text-accent-secondary">
-        <div className="t truncate font-semibold text-ink">{l.name}</div>
+        <div className="t truncate font-semibold text-ink">{l.whiteLabel && l.endClient ? l.endClient : l.name}</div>
         <div className="truncate text-[12.5px] text-ink-secondary">
-          {l.client && (!nested || l.parentId) && l.client !== l.name ? `${l.client} · ` : ''}
+          {l.whiteLabel ? <span className="font-semibold text-accent-secondary">White label via {l.client || 'client'} · </span> : l.client && l.client !== l.name ? `${l.client} · ` : ''}
           {detail || 'No open work'}
           {l.overdue > 0 && <span className="sr-only"> — overdue</span>}
         </div>

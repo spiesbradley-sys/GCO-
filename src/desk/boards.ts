@@ -165,8 +165,7 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'system', l: 'Accounting System', t: 'select', o: o([['QuickBooks Online', 'blue'], ['Xero', 'green'], ['Other']]) },
       { k: 'bank', l: 'Bank Feed Health', t: 'select', o: o([['Connected', 'green'], ['Issue', 'red'], ['Not set up']]) },
       { k: 'letter', l: 'Engagement Letter Signed', t: 'check' },
-      { k: 'whiteLabel', l: 'White label', t: 'check', lock: ['controller', 'management', 'owner'], hint: 'Tick for a client we work for on behalf of THEIR clients (e.g. Vincere). Add those end clients from its drawer.' },
-      { k: 'parent', l: 'White-label parent', t: 'rel', to: 'clients', lock: ['controller', 'management', 'owner'], hint: 'Set on an end client of a white-label client (e.g. a Vincere customer). Leave blank for ordinary clients.' },
+      { k: 'whiteLabel', l: 'White label', t: 'check', lock: ['controller', 'management', 'owner'], hint: 'Tick for a client we work for on behalf of THEIR clients (e.g. Vincere). The underlying businesses are not our clients: add one engagement per business and name it in "End client".' },
       { k: 'fee', l: 'Monthly Fee', t: 'money' },
       { k: 'start', l: 'Start Date', t: 'date' },
       {
@@ -185,10 +184,7 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'intake', l: 'Onboarding Form', t: 'rel', to: 'intake' },
       { k: 'notes', l: 'Notes', t: 'long' },
     ],
-    back: [
-      { b: 'clients', k: 'parent', l: 'End clients (white label)' },
-      { b: 'engagements', k: 'client', l: 'Engagements' },
-    ],
+    back: [{ b: 'engagements', k: 'client', l: 'Engagements' }],
     views: [
       { n: 'All clients', type: 'table', cols: ['name', 'status', 'onboarding', 'access', 'system', 'bank', 'letter', 'fee'] },
       { n: 'By status', type: 'board', group: 'status', cardMeta: ['access', 'fee'] },
@@ -206,6 +202,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     fields: [
       { k: 'name', l: 'Engagement', t: 'title' },
       { k: 'client', l: 'Client', t: 'rel', to: 'clients' },
+      { k: 'endClient', l: 'End client (white label)', t: 'text', hint: 'Only for a white-label client such as Vincere: the underlying business this engagement is for. They are not our client — Vincere is.' },
       { k: 'service', l: 'Service Type', t: 'select', o: o([['Managed Bookkeeping', 'green'], ['QoE Lite', 'purple'], ['Cleanup/Catch-up', 'orange'], ['Other']]) },
       { k: 'status', l: 'Status', t: 'select', o: o([['Pilot', 'yellow'], ['Active', 'green'], ['Paused', 'orange'], ['Ended', 'red']]) },
       { k: 'fee', l: 'Monthly Fee', t: 'money' },
@@ -223,7 +220,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     ],
     back: [{ b: 'cycles', k: 'engagement', l: 'Monthly Cycles' }],
     views: [
-      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'service', 'status', 'frequency', 'fee', 'slaDelivery', 'bookkeeper'] },
+      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'endClient', 'service', 'status', 'frequency', 'fee', 'slaDelivery', 'bookkeeper'] },
       { n: 'By service', type: 'board', group: 'service', cardMeta: ['status', 'fee'] },
     ],
   },

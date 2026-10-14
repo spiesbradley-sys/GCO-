@@ -60,10 +60,9 @@ export function utilBand(pct: number): UtilBand {
 export type UtilLine = {
   id: string; // engagement id
   name: string;
-  client: string; // the engagement's client; for a white-label engagement, the end client
+  client: string; // the engagement's client (for a white-label engagement: the white-label client, e.g. Vincere)
+  endClient: string; // white label only: the underlying business we do the work for (not a GCO client)
   whiteLabel: boolean;
-  parentId: string | null; // the white-label parent of `client`, when it is an end client
-  parentName: string;
   capacity: number | null; // explicit value on the engagement, if any
   baseline: number; // the ENGAGEMENT's standing load: explicit capacity, white-label default, or engagement + cycles
   usingDefault: boolean; // true when no explicit capacity is set
@@ -75,8 +74,8 @@ export type UtilLine = {
   points: number;
 };
 
-/** A white-label client's end-client engagements roll up into one group; any
- * other engagement is its own single-line group. */
+/** All of a white-label client's engagements roll up into one group, labelled
+ * with that client; any other engagement is its own single-line group. */
 export type UtilGroup = { key: string; label: string; whiteLabel: boolean; lines: UtilLine[]; points: number };
 
 export type UtilRow = {
@@ -122,9 +121,8 @@ export function personUtilization(data: DeskData, person: Person, today = todayI
 
   const lines: UtilLine[] = engagements.map((e) => {
     const client = clientById.get(e.client) as Rec | undefined;
-    // An end client's parent (e.g. Vincere) is what carries the white-label flag.
-    const parent = client?.parent ? (clientById.get(client.parent) as Rec | undefined) : undefined;
-    const whiteLabel = Boolean(client?.whiteLabel || parent?.whiteLabel);
+    // The white-label flag lives on the client (Vincere); the underlying business is only named on the engagement.
+    const whiteLabel = Boolean(client?.whiteLabel);
     const isBk = e.bookkeeper === person.id;
     const isCtrl = e.controller === person.id;
     const share = isCtrl && !isBk ? CONTROLLER_SHARE : 1;
@@ -148,6 +146,7 @@ export function personUtilization(data: DeskData, person: Person, today = todayI
       id: e.id as string,
       name: (e.name as string) || 'Untitled',
       client: ((client?.name as string) || '') as string,
+      endClient: whiteLabel ? (((e.endClient as string) || '') as string) : '',
       whiteLabel,
       capacity: explicit,
       baseline,
@@ -158,8 +157,6 @@ export function personUtilization(data: DeskData, person: Person, today = todayI
       queries,
       overdue,
       points: baseline * share + reviews * WEIGHTS.review + queries * WEIGHTS.query + overdue * WEIGHTS.overdue,
-      parentId: (parent?.id as string) ?? null,
-      parentName: ((parent?.name as string) ?? '') as string,
     };
   });
 
@@ -167,18 +164,16 @@ export function personUtilization(data: DeskData, person: Person, today = todayI
   const counted = new Set(lines.flatMap((l) => cycles.filter((c) => c.engagement === l.id).map((c) => c.id)));
   const otherQueries = openQueries.filter((q) => !counted.has(q.cycle)).length;
 
-  // Group white-label end-client engagements under their client.
+  // Group a white-label client's engagements under that client.
   const groups: UtilGroup[] = [];
   const byClient = new Map<string, UtilGroup>();
   for (const l of lines) {
     const e = engagements.find((x) => x.id === l.id) as Rec;
     if (l.whiteLabel && e.client) {
-      // End clients group under their white-label parent; an engagement held
-      // directly on the white-label client groups under that client.
-      const key = `wl:${l.parentId ?? e.client}`;
+      const key = `wl:${e.client}`;
       let g = byClient.get(key);
       if (!g) {
-        g = { key, label: l.parentName || l.client || 'White-label client', whiteLabel: true, lines: [], points: 0 };
+        g = { key, label: l.client || 'White-label client', whiteLabel: true, lines: [], points: 0 };
         byClient.set(key, g);
         groups.push(g);
       }

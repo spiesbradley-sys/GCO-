@@ -24,6 +24,15 @@ export function OptionChip({ field, value }: { field: Field; value: string }) {
   return <Chip color={optColor(field, value)}>{value}</Chip>;
 }
 
+/** Marks a white-label client (we work for THEIR clients). Shown everywhere the client appears. */
+export function WhiteLabelTag() {
+  return (
+    <span className="ml-1.5 inline-flex items-center whitespace-nowrap rounded-pill bg-accent-secondary px-2 py-0.5 text-[11px] font-bold uppercase tracking-eyebrow text-white">
+      White label
+    </span>
+  );
+}
+
 export function Tick({ on }: { on: boolean }) {
   return (
     <span
@@ -64,7 +73,12 @@ export function ValueCell({ field, row, ctx }: { field: Field; row: Rec; ctx: Ce
   const v = row[field.k];
   switch (field.t) {
     case 'title':
-      return <>{(v as string) || 'Untitled'}</>;
+      return (
+        <>
+          {(v as string) || 'Untitled'}
+          {row.whiteLabel ? <WhiteLabelTag /> : null}
+        </>
+      );
     case 'select':
       return v ? <OptionChip field={field} value={v as string} /> : null;
     case 'multi':
@@ -83,8 +97,16 @@ export function ValueCell({ field, row, ctx }: { field: Field; row: Rec; ctx: Ce
       return v == null || v === '' ? null : <span className="tnum">{String(v)}</span>;
     case 'date':
       return v ? <span className="tnum">{fmtDate(v as string)}</span> : null;
-    case 'rel':
-      return v ? <span className="text-ink">{titleOf(ctx.data, field.to as BoardKey, v as string)}</span> : null;
+    case 'rel': {
+      if (!v) return null;
+      const target = field.to === 'clients' ? (ctx.data.clients || []).find((c) => c.id === v) : undefined;
+      return (
+        <span className="text-ink">
+          {titleOf(ctx.data, field.to as BoardKey, v as string)}
+          {target?.whiteLabel ? <WhiteLabelTag /> : null}
+        </span>
+      );
+    }
     case 'person':
       return v ? <>{ctx.usersById.get(v as string) ?? '—'}</> : null;
     case 'url':

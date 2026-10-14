@@ -52,6 +52,13 @@ export function recordWarnings(board: BoardKey, r: Rec, data: DeskData): string[
       w.push(n >= 0 ? `SLA due in ${n} business day${n === 1 ? '' : 's'}.` : `SLA due date passed ${-n} business day${n === -1 ? '' : 's'} ago.`);
     }
   }
+  if (board === 'clients' && r.whiteLabel)
+    w.push(`WHITE LABEL: ${r.name} is our client, but we do the work for THEIR clients. Those businesses are not GCO clients — they appear only as the "End client" on this client's engagements.`);
+  if (board === 'engagements') {
+    const c = rec(data, 'clients', r.client);
+    if (c?.whiteLabel)
+      w.push(`WHITE LABEL via ${c.name}: ${r.endClient ? `this is the work we do for ${r.endClient}` : 'name the underlying business in "End client"'}. ${c.name} is the client; ${r.endClient || 'the end client'} is not.`);
+  }
   if (board === 'engagements' && r.service === 'Managed Bookkeeping' && (r.slaDelivery == null || r.slaDelivery === ''))
     w.push('No SLA terms set. Standard is 5 / 5 / 1 business days.');
   if (board === 'deliverables' && !r.qc) w.push('No QC sign-off name yet. Nothing reaches a client without one.');

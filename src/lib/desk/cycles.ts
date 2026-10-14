@@ -33,18 +33,13 @@ function backfillStartKey(startDate: string | null | undefined, now: Date): stri
 }
 
 /** Business days after month-end an engagement's books must be closed: 8 for a
- * white-label client (or an end client of one), 5 otherwise. */
+ * white-label client's engagements, 5 otherwise. */
 export async function closeBdFor(engagementId: unknown): Promise<number> {
   if (!engagementId) return CLOSE_SLA_BD;
   const e = await prisma.deskEngagement.findUnique({ where: { id: String(engagementId) }, select: { client: true } });
   if (!e?.client) return CLOSE_SLA_BD;
-  const c = await prisma.deskClient.findUnique({ where: { id: e.client }, select: { whiteLabel: true, parent: true } });
-  if (c?.whiteLabel) return WHITE_LABEL_CLOSE_BD;
-  if (c?.parent) {
-    const p = await prisma.deskClient.findUnique({ where: { id: c.parent }, select: { whiteLabel: true } });
-    if (p?.whiteLabel) return WHITE_LABEL_CLOSE_BD;
-  }
-  return CLOSE_SLA_BD;
+  const c = await prisma.deskClient.findUnique({ where: { id: e.client }, select: { whiteLabel: true } });
+  return c?.whiteLabel ? WHITE_LABEL_CLOSE_BD : CLOSE_SLA_BD;
 }
 
 export type EnsureOpts = { backfill?: boolean; now?: Date };
@@ -63,7 +58,7 @@ export async function ensureMonthlyCycles(actor: { id: string; email: string }, 
   const cur = ym(now);
   const engagements = await prisma.deskEngagement.findMany({
     where: { service: 'Managed Bookkeeping', status: { in: ['Active', 'Pilot'] } },
-    select: { id: true, name: true, client: true, start: true, bookkeeper: true, controller: true, frequency: true },
+    select: { id: true, name: true, client: true, endClient: true, start: true, bookkeeper: true, controller: true, frequency: true },
   });
 
   const created: GeneratedCycle[] = [];
@@ -73,10 +68,13 @@ export async function ensureMonthlyCycles(actor: { id: string; email: string }, 
     if (months.length === 0) continue;
     const existing = await prisma.deskCycle.findMany({ where: { engagement: e.id }, select: { period: true } });
     const have = new Set(existing.map((c) => (c.period ?? '').slice(0, 7)));
+    // White label: the cycle is named for the underlying business, with the white-label client alongside
+    // ("Acme Dental (via Vincere Tax) — Sep 2026"), so it is never mistaken for a GCO client.
     let clientName: string | undefined;
     if (e.client) {
-      const c = await prisma.deskClient.findUnique({ where: { id: e.client }, select: { name: true } });
+      const c = await prisma.deskClient.findUnique({ where: { id: e.client }, select: { name: true, whiteLabel: true } });
       clientName = c?.name ?? undefined;
+      if (c?.whiteLabel && e.endClient) clientName = `${e.endClient} (via ${c.name})`;
     }
     const bd = await closeBdFor(e.id);
 

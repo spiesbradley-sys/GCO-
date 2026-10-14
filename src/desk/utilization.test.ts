@@ -127,35 +127,36 @@ describe('white-label client', () => {
   });
 });
 
-describe('white-label end clients', () => {
+describe('white-label engagements name their end client, which is not a client record', () => {
   const wl: DeskData = {
     ...data,
     clients: [
       { id: 'vin', name: 'Vincere Tax', whiteLabel: true },
-      { id: 'ec1', name: 'Acme Dental', parent: 'vin' },
-      { id: 'ec2', name: 'Bright Smiles', parent: 'vin' },
       { id: 'std', name: 'Standard Co' },
     ],
     engagements: [
-      { id: 'w1', name: 'Acme books', client: 'ec1', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 'w2', name: 'Bright books', client: 'ec2', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 'w3', name: 'Vincere direct', client: 'vin', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 's1', name: 'Standard', client: 'std', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
+      { id: 'w1', name: 'Acme Dental (via Vincere Tax)', client: 'vin', endClient: 'Acme Dental', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
+      { id: 'w2', name: 'Bright Smiles (via Vincere Tax)', client: 'vin', endClient: 'Bright Smiles', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
+      { id: 's1', name: 'Standard', client: 'std', endClient: 'Ignored', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
     ],
     cycles: [],
     queries: [],
   };
 
-  it('treats an engagement on an end client as white label via its parent', () => {
+  it('carries the client (Vincere) and the end client on each white-label line', () => {
     const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
-    expect(lines.find((l) => l.id === 'w1')).toMatchObject({ whiteLabel: true, parentId: 'vin', parentName: 'Vincere Tax', client: 'Acme Dental' });
+    expect(lines.find((l) => l.id === 'w1')).toMatchObject({ whiteLabel: true, client: 'Vincere Tax', endClient: 'Acme Dental' });
   });
-  it('groups end-client and direct engagements under the one parent', () => {
+  it('ignores an end client set on a non-white-label engagement', () => {
+    const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
+    expect(lines.find((l) => l.id === 's1')).toMatchObject({ whiteLabel: false, endClient: '' });
+  });
+  it('groups every engagement under the white-label client, labelled with that client', () => {
     const groups = personUtilization(wl, users[0], TODAY).groups;
     const g = groups.filter((x) => x.whiteLabel);
     expect(g).toHaveLength(1);
     expect(g[0].label).toBe('Vincere Tax');
-    expect(g[0].lines.map((l) => l.id).sort()).toEqual(['w1', 'w2', 'w3']);
+    expect(g[0].lines.map((l) => l.id).sort()).toEqual(['w1', 'w2']);
   });
 });
 
