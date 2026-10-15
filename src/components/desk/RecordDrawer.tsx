@@ -14,6 +14,8 @@ import { centsToDollars, dollarsToCents } from '@/desk/format';
 import { recordWarnings, type DeskData } from '@/desk/insights';
 import { OptionChip } from './ui';
 import { Discussion } from './Discussion';
+import { CycleFinancials } from './CycleFinancials';
+import { ClientPortalLink } from './ClientPortalLink';
 import { formatCalc } from './ui';
 import { updateRecord, createRecord, deleteRecord } from '@/desk/actions/records';
 import type { Rec } from '@/desk/compute';
@@ -150,6 +152,13 @@ export function RecordDrawer({
               </div>
             );
           })()}
+
+        {board === 'cycles' && (
+          <CycleFinancials cycleId={record.id as string} stage={(record.stage as string) ?? null} canWrite={canWrite} />
+        )}
+        {board === 'clients' && (
+          <ClientPortalLink clientId={record.id as string} portalOrgId={(record.portalOrgId as string) ?? null} role={role} />
+        )}
 
         {/* warnings */}
         {warnings.map((w, i) => (

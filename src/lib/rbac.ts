@@ -11,6 +11,7 @@ import type { Role } from '@prisma/client';
 export type Permission =
   | 'dashboard.view'
   | 'analytics.view'
+  | 'cycles.view'
   | 'invoices.view'
   | 'invoices.pay'
   | 'invoices.manage'
@@ -30,6 +31,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   client: [
     'dashboard.view',
     'analytics.view',
+    'cycles.view',
     'invoices.view',
     'invoices.pay',
     'connections.view',
@@ -42,6 +44,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   accountant: [
     'dashboard.view',
     'analytics.view',
+    'cycles.view',
     'invoices.view',
     'invoices.manage',
     'connections.view',
@@ -62,6 +65,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   gco_staff: [
     'dashboard.view',
     'analytics.view',
+    'cycles.view',
     'invoices.view',
     'invoices.manage',
     'connections.view',
@@ -79,6 +83,7 @@ const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   admin: [
     'dashboard.view',
     'analytics.view',
+    'cycles.view',
     'invoices.view',
     'invoices.pay',
     'invoices.manage',

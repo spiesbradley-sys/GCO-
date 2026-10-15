@@ -24,6 +24,7 @@
     "@auth/prisma-adapter": "^2.7.4",
     "@prisma/client": "^5.22.0",
     "clsx": "^2.1.1",
+    "exceljs": "^4.4.0",
     "next": "14.2",
     "next-auth": "5.0.0-beta.25",
     "nodemailer": "^6.9.16",

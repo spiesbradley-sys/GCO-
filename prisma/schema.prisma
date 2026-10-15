@@ -870,8 +870,33 @@ model DeskCycle {
   engagementRecord DeskEngagement?   @relation(fields: [engagement], references: [id])
   queries          DeskQuery[]
   deliverables     DeskDeliverable[]
+  financials       DeskFinancials[]
 
   @@map("desk_cycles")
+}
+
+/// A management-financials workbook (the GCO monthly book: Overview, P&L - Monthly,
+/// Cash - Monthly, Solvency & Liquidity, ...) uploaded against a cycle. The bytes
+/// are not kept: the workbook is parsed on upload and only the figures the client
+/// dashboard needs are stored, in `data` (see src/desk/financials/types.ts). The
+/// newest upload on a cycle wins; it shows in the client portal once the cycle is
+/// delivered.
+model DeskFinancials {
+  id         String   @id @default(cuid())
+  cycle      String // FK -> DeskCycle.id
+  fileName   String
+  sizeBytes  Int
+  /// Parsed FinancialsData (money in cents).
+  data       Json
+  /// Parser notes for the desk (e.g. a sheet that was missing). Never shown to clients.
+  warnings   String[] @default([])
+  uploadedBy String? // DeskUser.id
+  createdAt  DateTime @default(now())
+
+  cycleRecord DeskCycle @relation(fields: [cycle], references: [id], onDelete: Cascade)
+
+  @@index([cycle, createdAt])
+  @@map("desk_financials")
 }
 
 model DeskQuery {
