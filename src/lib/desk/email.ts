@@ -130,6 +130,22 @@ export async function deliverPortalResetEmail(to: string, opts: { name: string |
   await sendEmail(to, 'Reset your GCO Partners client portal password', html, `Link: ${opts.link}`);
 }
 
+/** A new chat message from GCO, to a client-portal user. Never throws. */
+export async function deliverPortalMessageEmail(
+  to: string,
+  opts: { name: string | null; fromName: string; preview: string; link: string },
+): Promise<void> {
+  const hello = opts.name ? `Hi ${esc(opts.name)}, ` : '';
+  const html = shell(`<div style="background:#ffffff;border-radius:12px;padding:28px">
+      <h1 style="font-family:Montserrat,Arial,sans-serif;font-size:20px;margin:0 0 10px">New message from GCO Partners</h1>
+      <p style="font-size:15px;line-height:1.5;color:#5c5250;margin:0 0 12px">${hello}${esc(opts.fromName)} replied in your client portal:</p>
+      <p style="font-size:15px;line-height:1.5;color:#251c1a;margin:0 0 20px;padding:12px 14px;background:#faf7f1;border-radius:8px;white-space:pre-wrap">${esc(opts.preview)}</p>
+      ${button(opts.link, 'Open your messages')}
+    </div>
+    <p style="color:#6f6a62;font-size:12px;margin-top:20px">You're receiving this because you have access to a GCO Partners client portal.</p>`);
+  await sendEmail(to, `New message from GCO Partners`, html, `Link: ${opts.link}`);
+}
+
 /** Generic desk notification email (assignment, new cycle, query, review…).
  * Shares the invite/reset template. Never throws. */
 export async function deliverDeskNotificationEmail(

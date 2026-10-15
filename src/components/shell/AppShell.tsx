@@ -18,6 +18,7 @@ export function AppShell({
   activeOrgName,
   user,
   isImpersonating,
+  badges,
   children,
 }: {
   role: Role;
@@ -26,6 +27,7 @@ export function AppShell({
   activeOrgName: string;
   user: { name?: string | null; email?: string | null };
   isImpersonating: boolean;
+  badges?: Record<string, number>;
   children: ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -40,6 +42,7 @@ export function AppShell({
           collapsed={collapsed}
           mobileOpen={mobileOpen}
           onCloseMobile={() => setMobileOpen(false)}
+          badges={badges}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           {isImpersonating && <ImpersonationBanner orgName={activeOrgName} />}

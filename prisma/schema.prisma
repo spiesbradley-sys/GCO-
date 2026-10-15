@@ -829,6 +829,10 @@ model DeskClient {
   /// Optional link to a client-portal Org (integration hook). Never exposes the
   /// desk to clients; purely a reference the desk can resolve.
   portalOrgId String?
+  /// Client chat read markers, one per side: staff have read client messages up
+  /// to chatStaffReadAt; the client has read staff messages up to chatClientReadAt.
+  chatStaffReadAt  DateTime?
+  chatClientReadAt DateTime?
   createdAt   DateTime @default(now())
   createdBy   String?
   updatedAt   DateTime @updatedAt
@@ -836,8 +840,28 @@ model DeskClient {
 
   intakeRecord DeskIntake?      @relation("ClientIntake", fields: [intake], references: [id])
   engagements  DeskEngagement[]
+  messages     ClientMessage[]
 
   @@map("desk_clients")
+}
+
+/// Client ↔ GCO chat: one conversation per desk client. The client writes from
+/// the portal (Messages); staff reply from the desk, inside that client's portal
+/// view. Every message notifies the other side (see src/lib/chat.ts).
+model ClientMessage {
+  id               String   @id @default(cuid())
+  client           String // DeskClient.id
+  fromClient       Boolean
+  authorUserId     String? // portal User.id, when fromClient
+  authorDeskUserId String? // DeskUser.id, when from GCO staff
+  authorName       String
+  body             String   @db.Text
+  createdAt        DateTime @default(now())
+
+  clientRecord DeskClient @relation(fields: [client], references: [id], onDelete: Cascade)
+
+  @@index([client, createdAt])
+  @@map("client_messages")
 }
 
 model DeskEngagement {

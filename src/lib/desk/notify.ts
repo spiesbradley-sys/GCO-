@@ -21,6 +21,8 @@ export async function notifyUsers(opts: {
   title: string;
   body: string;
   actorEmail?: string | null;
+  /** Desk path the email links to, when it isn't the record's board drawer. */
+  path?: string;
 }): Promise<void> {
   try {
     const ids = [...new Set(opts.userIds.filter((x): x is string => Boolean(x)))].filter((id) => id !== opts.excludeUserId);
@@ -32,7 +34,7 @@ export async function notifyUsers(opts: {
     });
     if (!people.length) return;
 
-    const link = `${deskBaseUrl()}/desk/boards/${opts.board}?open=${encodeURIComponent(opts.recordId)}`;
+    const link = `${deskBaseUrl()}${opts.path ?? `/desk/boards/${opts.board}?open=${encodeURIComponent(opts.recordId)}`}`;
 
     // In-app first: it must land even if email delivery is unconfigured or fails.
     await prisma.deskNotification

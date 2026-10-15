@@ -40,12 +40,15 @@ export function Sidebar({
   collapsed,
   mobileOpen,
   onCloseMobile,
+  badges,
 }: {
   role: Role;
   orgName: string;
   collapsed: boolean;
   mobileOpen: boolean;
   onCloseMobile: () => void;
+  /** Unread counts keyed by nav href (e.g. client chat). */
+  badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
 
@@ -95,6 +98,17 @@ export function Sidebar({
                     )}
                     <NavGlyph name={item.icon} />
                     {!collapsed && <span>{item.label}</span>}
+                    {badges?.[item.href] ? (
+                      <span
+                        className={cn(
+                          "rounded-pill bg-accent-alert px-1.5 text-[11px] font-semibold leading-[18px] text-white tabular-nums",
+                          collapsed ? "absolute right-1 top-1" : "ml-auto",
+                        )}
+                        aria-label={`${badges[item.href]} unread`}
+                      >
+                        {badges[item.href]}
+                      </span>
+                    ) : null}
                   </Link>
                 );
               })}

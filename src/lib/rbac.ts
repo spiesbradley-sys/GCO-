@@ -12,6 +12,7 @@ export type Permission =
   | 'dashboard.view'
   | 'analytics.view'
   | 'cycles.view'
+  | 'chat.use'
   | 'invoices.view'
   | 'invoices.pay'
   | 'invoices.manage'
@@ -28,9 +29,10 @@ export type Permission =
   | 'audit.view';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  // Clients see two things only: their CFO dashboard (built from the financials
-  // workbook the accountant uploads on the desk) and how their monthly close is going.
-  client: ['analytics.view', 'cycles.view'],
+  // Clients see their CFO dashboard (built from the financials workbook the
+  // accountant uploads on the desk), how their monthly close is going, and a chat
+  // with their GCO team.
+  client: ['analytics.view', 'cycles.view', 'chat.use'],
   accountant: [
     'dashboard.view',
     'analytics.view',

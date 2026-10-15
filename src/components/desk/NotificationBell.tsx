@@ -69,7 +69,12 @@ export function NotificationBell({ initialUnread }: { initialUnread: number }) {
       setUnread((u) => Math.max(0, u - 1));
       markNotificationRead({ id: n.id }).catch(() => {});
     }
-    router.push(`/desk/boards/${n.board}?open=${encodeURIComponent(n.recordId)}`);
+    // Client chat messages open the conversation inside that client's portal view.
+    router.push(
+      n.kind === 'chat'
+        ? `/desk/clients/${encodeURIComponent(n.recordId)}/portal/messages`
+        : `/desk/boards/${n.board}?open=${encodeURIComponent(n.recordId)}`,
+    );
   }
 
   async function readAll() {

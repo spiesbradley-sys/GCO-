@@ -27,6 +27,7 @@ export const NAV: NavGroup[] = [
     label: 'Close',
     items: [
       { label: 'Monthly close', href: '/cycles', permission: 'cycles.view', icon: 'document' },
+      { label: 'Messages', href: '/chat', permission: 'chat.use', icon: 'message' },
       { label: 'Invoices', href: '/invoices', permission: 'invoices.view', icon: 'invoice' },
       { label: 'Connections', href: '/connections', permission: 'connections.view', icon: 'link' },
     ],

@@ -18,11 +18,14 @@ export function DeskShell({
   user,
   counts,
   unread,
+  chatUnread = 0,
   children,
 }: {
   user: { name: string | null; email: string; role: DeskRole };
   counts: Counts;
   unread: number;
+  /** Client chat messages not yet read by staff (across the clients this user sees). */
+  chatUnread?: number;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -49,6 +52,7 @@ export function DeskShell({
 
       <Group label="Desk">
         <NavItem href="/desk/my-day" label="My Day" active={isActive('/desk/my-day')} onNav={() => setOpen(false)} />
+        <NavItem href="/desk/messages" label="Client messages" alert={chatUnread} active={isActive('/desk/messages')} onNav={() => setOpen(false)} />
         <NavItem href="/desk/utilization" label="Utilization" active={isActive('/desk/utilization')} onNav={() => setOpen(false)} />
         <NavItem href="/desk" label="Overview" active={isActive('/desk')} onNav={() => setOpen(false)} />
         <NavItem href="/desk/guide" label="How the desk runs" active={isActive('/desk/guide')} onNav={() => setOpen(false)} />
@@ -149,6 +153,7 @@ function NavItem({
   label,
   step,
   count,
+  alert,
   active,
   onNav,
 }: {
@@ -156,6 +161,8 @@ function NavItem({
   label: string;
   step?: number;
   count?: number;
+  /** Unread count shown as a rust pill (only when > 0). */
+  alert?: number;
   active: boolean;
   onNav: () => void;
 }) {
@@ -173,6 +180,11 @@ function NavItem({
       {step != null && <span className="w-3.5 text-right font-numeric text-[10.5px] text-ink-tertiary">{step}</span>}
       <span className="truncate">{label}</span>
       {count != null && <span className="ml-auto font-numeric text-[11px] text-ink-tertiary">{count}</span>}
+      {alert ? (
+        <span className="ml-auto rounded-pill bg-accent-alert px-1.5 font-numeric text-[11px] leading-[18px] text-white" aria-label={`${alert} unread`}>
+          {alert}
+        </span>
+      ) : null}
     </Link>
   );
 }
