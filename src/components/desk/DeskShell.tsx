@@ -83,8 +83,7 @@ export function DeskShell({
 
       {user.role === 'owner' && (
         <Group label="Owner">
-          <NavItem href="/desk/team" label="Team" active={isActive('/desk/team')} onNav={() => setOpen(false)} />
-          <NavItem href="/desk/audit" label="Audit log" active={isActive('/desk/audit')} onNav={() => setOpen(false)} />
+          <NavItem href="/desk/admin" label="Admin" active={pathname.startsWith('/desk/admin')} onNav={() => setOpen(false)} />
         </Group>
       )}
 

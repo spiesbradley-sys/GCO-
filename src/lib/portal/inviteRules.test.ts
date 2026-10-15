@@ -73,6 +73,24 @@ describe('planAccept', () => {
   });
 });
 
+describe('planAccept — staff-sent password reset', () => {
+  const existing = { id: 'u1', role: 'client' as const, passwordHash: 'old-hash' };
+
+  it('replaces the password but never grants access', () => {
+    expect(planAccept({ existing, alreadyMember: false, password: 'a-long-passphrase', purpose: 'reset' })).toEqual({
+      ok: true,
+      createUser: false,
+      setPassword: true,
+      addMembership: false,
+    });
+  });
+
+  it('needs a password and an existing user', () => {
+    expect(planAccept({ existing, alreadyMember: true, password: null, purpose: 'reset' }).ok).toBe(false);
+    expect(planAccept({ existing: null, alreadyMember: false, password: 'a-long-passphrase', purpose: 'reset' }).ok).toBe(false);
+  });
+});
+
 describe('helpers', () => {
   it('normalizes emails so invites match existing users', () => {
     expect(normalizeEmail('  Dana@Practice.COM ')).toBe('dana@practice.com');

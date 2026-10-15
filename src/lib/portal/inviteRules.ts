@@ -47,8 +47,19 @@ export type AcceptPlan =
  * The platform role of an existing user is never changed, so a GCO staff account
  * accepting an invite stays staff.
  */
-export function planAccept(input: { existing: ExistingUser; alreadyMember: boolean; password: string | null }): AcceptPlan {
+export function planAccept(input: {
+  existing: ExistingUser;
+  alreadyMember: boolean;
+  password: string | null;
+  /** "reset" links (sent by staff from the admin panel) always set the password and never add access. */
+  purpose?: 'invite' | 'reset';
+}): AcceptPlan {
   const { existing, alreadyMember, password } = input;
+  if (input.purpose === 'reset') {
+    if (!existing) return { ok: false, error: INVITE_UNUSABLE };
+    if (!password) return { ok: false, error: 'Choose a new password.' };
+    return { ok: true, createUser: false, setPassword: true, addMembership: false };
+  }
   const needsPassword = !existing || !existing.passwordHash;
   if (needsPassword && !password) return { ok: false, error: 'Choose a password to finish setting up your login.' };
   return {

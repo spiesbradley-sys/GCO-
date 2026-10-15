@@ -53,7 +53,7 @@ export async function inviteUser(input: { email: string; role: DeskRole }): Prom
   const link = `${deskBaseUrl()}/desk/set-password?kind=invite&token=${token}`;
   await deliverDeskEmail(email, 'You are invited to the GCO Service Desk', link);
   await recordDeskAudit({ action: 'invite_sent', actorId: me.id, actorEmail: me.email, summary: `${email} as ${parsed.data.role}` });
-  revalidatePath('/desk/team');
+  revalidatePath('/desk/admin/staff');
   return { ok: true, link };
 }
 
@@ -74,7 +74,7 @@ export async function resendInvite(input: { inviteId: string }): Promise<Result>
   const link = `${deskBaseUrl()}/desk/set-password?kind=invite&token=${token}`;
   await deliverDeskEmail(invite.email, 'Your GCO Service Desk invite', link);
   await recordDeskAudit({ action: 'invite_resent', actorId: me.id, actorEmail: me.email, summary: invite.email });
-  revalidatePath('/desk/team');
+  revalidatePath('/desk/admin/staff');
   return { ok: true, link };
 }
 
@@ -87,7 +87,7 @@ export async function revokeInvite(input: { inviteId: string }): Promise<Result>
   }
   await prisma.deskInvite.update({ where: { id: input.inviteId }, data: { revokedAt: new Date() } });
   await recordDeskAudit({ action: 'invite_revoked', actorId: me.id, actorEmail: me.email, recordId: input.inviteId });
-  revalidatePath('/desk/team');
+  revalidatePath('/desk/admin/staff');
   return { ok: true };
 }
 
@@ -115,7 +115,7 @@ export async function changeRole(input: { userId: string; role: DeskRole }): Pro
     recordId: input.userId,
     summary: `${target.email}: ${target.role} → ${input.role}`,
   });
-  revalidatePath('/desk/team');
+  revalidatePath('/desk/admin/staff');
   return { ok: true };
 }
 
@@ -142,6 +142,6 @@ export async function setUserActive(input: { userId: string; active: boolean }):
     recordId: input.userId,
     summary: target.email,
   });
-  revalidatePath('/desk/team');
+  revalidatePath('/desk/admin/staff');
   return { ok: true };
 }

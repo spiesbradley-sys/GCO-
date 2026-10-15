@@ -29,10 +29,12 @@ export default async function InvitePage({ searchParams }: { searchParams: { tok
       <div className="flex flex-col gap-1">
         <span className="text-[12px] font-semibold uppercase tracking-eyebrow text-ink-tertiary">{invite.orgName}</span>
         <h1 className="font-heading text-[20px] font-bold text-ink">
-          {invite.needsPassword ? 'Set up your login' : 'Accept your invite'}
+          {invite.purpose === 'reset' ? 'Choose a new password' : invite.needsPassword ? 'Set up your login' : 'Accept your invite'}
         </h1>
         <p className="text-[14px] text-ink-secondary">
-          {invite.needsPassword
+          {invite.purpose === 'reset'
+            ? 'GCO sent you this link to reset your client portal password. Choose a new one to sign in.'
+            : invite.needsPassword
             ? 'Choose a password for your client portal. You’ll use it with this email from now on.'
             : 'You already have a portal login. Accept to add this account to it, then sign in with your usual password.'}
         </p>

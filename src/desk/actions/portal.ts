@@ -117,7 +117,7 @@ export async function listPortalAccess(clientId: string): Promise<PortalAccess |
       orderBy: { createdAt: 'asc' },
     }),
     prisma.portalInvite.findMany({
-      where: { orgId: linked.org.id, acceptedAt: null, revokedAt: null },
+      where: { orgId: linked.org.id, purpose: 'invite', acceptedAt: null, revokedAt: null },
       orderBy: { createdAt: 'desc' },
     }),
   ]);
@@ -166,7 +166,7 @@ export async function invitePortalUser(input: { clientId: string; name: string; 
   const token = newToken();
   await prisma.$transaction([
     prisma.portalInvite.updateMany({
-      where: { orgId: linked.org.id, email, acceptedAt: null, revokedAt: null },
+      where: { orgId: linked.org.id, email, purpose: 'invite', acceptedAt: null, revokedAt: null },
       data: { revokedAt: new Date() },
     }),
     prisma.portalInvite.create({

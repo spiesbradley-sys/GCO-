@@ -15,7 +15,7 @@ import { INVITE_UNUSABLE, inviteState, planAccept } from '@/lib/portal/inviteRul
 
 export type InviteLookup =
   | { ok: false; error: string }
-  | { ok: true; orgName: string; email: string; name: string | null; needsPassword: boolean };
+  | { ok: true; orgName: string; email: string; name: string | null; needsPassword: boolean; purpose: 'invite' | 'reset' };
 
 async function findInvite(token: string) {
   if (!token || token.length < 20) return null;
@@ -27,7 +27,9 @@ export async function lookupInvite(token: string): Promise<InviteLookup> {
   const invite = await findInvite(token);
   if (inviteState(invite) !== 'valid' || !invite) return { ok: false, error: INVITE_UNUSABLE };
   const user = await prisma.user.findUnique({ where: { email: invite.email }, select: { passwordHash: true } });
-  return { ok: true, orgName: invite.org.name, email: invite.email, name: invite.name, needsPassword: !user?.passwordHash };
+  const purpose = invite.purpose === 'reset' ? 'reset' : 'invite';
+  if (purpose === 'reset' && !user) return { ok: false, error: INVITE_UNUSABLE };
+  return { ok: true, orgName: invite.org.name, email: invite.email, name: invite.name, needsPassword: purpose === 'reset' || !user?.passwordHash, purpose };
 }
 
 const acceptSchema = z.object({ token: z.string().min(20), password: z.string().nullable() });
@@ -56,7 +58,8 @@ export async function acceptInvite(input: { token: string; password: string | nu
   const alreadyMember = existing
     ? !!(await prisma.membership.findUnique({ where: { userId_orgId: { userId: existing.id, orgId: invite.orgId } } }))
     : false;
-  const plan = planAccept({ existing, alreadyMember, password: parsed.data.password });
+  const purpose = invite.purpose === 'reset' ? 'reset' : 'invite';
+  const plan = planAccept({ existing, alreadyMember, password: parsed.data.password, purpose });
   if (!plan.ok) return plan;
 
   let passwordHash: string | undefined;
@@ -87,12 +90,17 @@ export async function acceptInvite(input: { token: string; password: string | nu
   });
   if (!userId) return { ok: false, error: INVITE_UNUSABLE };
 
-  await recordAudit({ action: 'member_joined', orgId: invite.orgId, actorId: userId, target: invite.email, metadata: { inviteId: invite.id } });
-  await recordDeskAudit({
-    action: 'portal.invite_accepted',
-    actorEmail: invite.email,
-    summary: `${invite.email} accepted their invite to ${invite.org.name}'s client portal`,
-  });
+  if (purpose === 'reset') {
+    await recordAudit({ action: 'permission_change', orgId: invite.orgId, actorId: userId, target: invite.email, metadata: { inviteId: invite.id, event: 'password_reset' } });
+    await recordDeskAudit({ action: 'portal.password_reset', actorEmail: invite.email, summary: `${invite.email} set a new client-portal password from a reset link` });
+  } else {
+    await recordAudit({ action: 'member_joined', orgId: invite.orgId, actorId: userId, target: invite.email, metadata: { inviteId: invite.id } });
+    await recordDeskAudit({
+      action: 'portal.invite_accepted',
+      actorEmail: invite.email,
+      summary: `${invite.email} accepted their invite to ${invite.org.name}'s client portal`,
+    });
+  }
 
   return { ok: true, email: invite.email, passwordSet: plan.setPassword };
 }

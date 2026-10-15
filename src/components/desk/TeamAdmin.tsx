@@ -35,12 +35,6 @@ export function TeamAdmin({ me, users, invites }: { me: string; users: UserRow[]
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <span className="eyebrow">Owner</span>
-        <h1 className="font-heading text-page-title text-ink">Team</h1>
-        <p className="max-w-2xl text-[15px] text-ink-secondary">Invite GCO staff, set their role, and manage access. Only you can see this screen.</p>
-      </div>
-
       {lastLink && (
         <Banner tone="info" action={<button onClick={() => { navigator.clipboard?.writeText(lastLink); toast.success('Copied.'); }} className="text-[13px] font-semibold text-accent-secondary">Copy</button>}>
           Invite link (also emailed; shown here while email is in dev mode): <span className="break-all font-mono text-[12px]">{lastLink}</span>

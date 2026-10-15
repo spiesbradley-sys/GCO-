@@ -117,6 +117,19 @@ export async function deliverPortalInviteEmail(
   await sendEmail(to, `Your ${opts.orgName} client portal login`, html, `Link: ${opts.link}`);
 }
 
+/** Staff-sent client-portal password reset. Never throws. */
+export async function deliverPortalResetEmail(to: string, opts: { name: string | null; link: string }): Promise<void> {
+  const hello = opts.name ? `Hi ${esc(opts.name)}, use` : 'Use';
+  const html = shell(`<div style="background:#ffffff;border-radius:12px;padding:28px">
+      <h1 style="font-family:Montserrat,Arial,sans-serif;font-size:20px;margin:0 0 10px">Reset your client portal password</h1>
+      <p style="font-size:15px;line-height:1.5;color:#5c5250;margin:0 0 20px">${hello} the button below to choose a new password for your GCO Partners client portal. This link expires in 72 hours and works once.</p>
+      ${button(opts.link, 'Choose a new password')}
+      <p style="font-size:12.5px;color:#6f6a62;margin:20px 0 0;word-break:break-all">Or paste this into your browser:<br>${opts.link}</p>
+    </div>
+    <p style="color:#6f6a62;font-size:12px;margin-top:20px">GCO Partners sent this at your request. If you didn't ask for it, you can ignore it and your password stays the same.</p>`);
+  await sendEmail(to, 'Reset your GCO Partners client portal password', html, `Link: ${opts.link}`);
+}
+
 /** Generic desk notification email (assignment, new cycle, query, review…).
  * Shares the invite/reset template. Never throws. */
 export async function deliverDeskNotificationEmail(
