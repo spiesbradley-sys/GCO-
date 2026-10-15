@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Drawer } from '@/components/ui/Drawer';
 import { Button } from '@/components/ui/Button';
@@ -108,6 +109,17 @@ export function RecordDrawer({
       <div key={stamp} className="flex flex-col gap-5">
         {/* title */}
         <DeskField field={nameField} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} prominent />
+
+        {board === 'clients' && (
+          <div>
+            <Link
+              href={`/desk/clients/${record.id as string}/portal/cycles`}
+              className="inline-flex h-8 items-center gap-2 rounded-pill border border-border-default bg-surface-card px-4 font-heading text-[14px] font-semibold text-ink transition-colors duration-fast hover:bg-surface-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-secondary"
+            >
+              View client portal
+            </Link>
+          </div>
+        )}
 
         {/* short fields */}
         <div className="grid grid-cols-[140px_1fr] items-start gap-x-3 gap-y-2.5">

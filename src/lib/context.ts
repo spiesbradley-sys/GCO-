@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import type { Role } from '@prisma/client';
 import { auth } from './auth';
 import { getTenantDb } from './tenant';
+import { prisma } from './prisma';
 import { can, type Permission } from './rbac';
 import type { SessionMembership } from '@/types/next-auth';
 
@@ -61,8 +62,22 @@ function effectiveRoleFor(platformRole: Role, membershipRole: Role): Role {
  * to the first membership (never trust the cookie blindly).
  */
 export async function requireTenantContext(): Promise<TenantContext> {
-  const user = await requireUser();
-  const memberships = user.memberships ?? [];
+  const sessionUser = await requireUser();
+  // Memberships (and the platform role) are re-read from the DB on every request
+  // rather than trusted from the JWT, so access revoked from the desk takes
+  // effect immediately instead of when the user's session cookie next refreshes.
+  const dbUser = await prisma.user.findUnique({
+    where: { id: sessionUser.id },
+    select: { role: true, memberships: { include: { org: { select: { name: true, type: true } } }, orderBy: { createdAt: 'asc' } } },
+  });
+  if (!dbUser) redirect('/login');
+  const memberships: SessionMembership[] = dbUser.memberships.map((m) => ({
+    orgId: m.orgId,
+    orgName: m.org.name,
+    orgType: m.org.type,
+    role: m.role,
+  }));
+  const user = { ...sessionUser, role: dbUser.role, memberships };
   if (memberships.length === 0) redirect('/onboarding');
 
   const requested = cookies().get(ACTIVE_ORG_COOKIE)?.value;

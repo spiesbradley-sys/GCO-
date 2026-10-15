@@ -101,6 +101,7 @@ enum AuditAction {
   login_failed
   permission_change
   member_invited
+  member_joined
   member_removed
   payment_initiated
   payment_succeeded
@@ -136,6 +137,7 @@ model Org {
   threads     Thread[]
   documents   Document[]
   auditLogs   AuditLog[]
+  invites     PortalInvite[]
 
   @@map("orgs")
 }
@@ -161,6 +163,29 @@ model User {
   auditLogs        AuditLog[] @relation("AuditActor")
 
   @@map("users")
+}
+
+/// Single-use invite into a client's portal account, sent by GCO staff from the
+/// desk. Only the token's SHA-256 hash is stored (the raw token is in the email).
+/// Accepting creates or reuses the User (matched by email) and adds a client
+/// Membership in `orgId`.
+model PortalInvite {
+  id             String    @id @default(cuid())
+  orgId          String
+  email          String
+  name           String?
+  tokenHash      String    @unique
+  invitedBy      String? // DeskUser.id
+  invitedByEmail String
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  org Org @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, email])
+  @@map("portal_invites")
 }
 
 /// Links a user to an org with an org-scoped role. Drives the context switcher:

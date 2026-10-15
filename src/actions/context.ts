@@ -4,6 +4,7 @@ import { cookies } from 'next/headers';
 import { revalidatePath } from 'next/cache';
 import { getCurrentUser } from '@/lib/context';
 import { ACTIVE_ORG_COOKIE } from '@/lib/context';
+import { prisma } from '@/lib/prisma';
 
 // Switch the active tenant. Validates that the target org is one the user
 // actually belongs to (never trust a client-supplied orgId), sets the cookie,
@@ -12,7 +13,9 @@ export async function setActiveOrg(orgId: string): Promise<{ ok: boolean }> {
   const user = await getCurrentUser();
   if (!user) return { ok: false };
 
-  const belongs = user.memberships.some((m) => m.orgId === orgId);
+  // Checked against the DB, not the JWT, so a just-accepted invite is switchable
+  // and a revoked membership is not (same rule as requireTenantContext).
+  const belongs = await prisma.membership.findUnique({ where: { userId_orgId: { userId: user.id, orgId } }, select: { id: true } });
   if (!belongs) return { ok: false };
 
   cookies().set(ACTIVE_ORG_COOKIE, orgId, {

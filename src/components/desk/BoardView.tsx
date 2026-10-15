@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -207,6 +208,11 @@ function BoardTable({
                   {f.l}
                 </th>
               ))}
+              {board === 'clients' && (
+                <th className="px-4 py-2.5 text-right text-[12px] font-semibold uppercase tracking-header text-ink-tertiary">
+                  <span className="sr-only">Client portal</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -217,6 +223,18 @@ function BoardTable({
                     <ValueCell field={f} row={r} ctx={ctx} />
                   </td>
                 ))}
+                {board === 'clients' && (
+                  <td className="whitespace-nowrap px-4 py-2 text-right align-top">
+                    <Link
+                      href={`/desk/clients/${r.id as string}/portal/cycles`}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`View portal for ${(r.name as string) || 'this client'}`}
+                      className="inline-flex h-8 items-center rounded-pill border border-border-default bg-surface-card px-3 font-heading text-[13px] font-semibold text-ink transition-colors duration-fast hover:bg-surface-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-secondary"
+                    >
+                      View portal
+                    </Link>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

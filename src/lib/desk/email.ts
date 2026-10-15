@@ -101,6 +101,22 @@ export async function deliverDeskEmail(to: string, subject: string, link: string
   await sendEmail(to, subject, emailHtml(heading, intro, link), `Link: ${link}`);
 }
 
+/** Invite into a client's portal account (sent by staff from the desk). Never throws. */
+export async function deliverPortalInviteEmail(
+  to: string,
+  opts: { name: string | null; orgName: string; link: string },
+): Promise<void> {
+  const hello = opts.name ? `Hi ${esc(opts.name)}, you` : 'You';
+  const html = shell(`<div style="background:#ffffff;border-radius:12px;padding:28px">
+      <h1 style="font-family:Montserrat,Arial,sans-serif;font-size:20px;margin:0 0 10px">Your GCO Partners client portal</h1>
+      <p style="font-size:15px;line-height:1.5;color:#5c5250;margin:0 0 20px">${hello} have access to the client portal for ${esc(opts.orgName)}: where each month-end close stands, what we need from you, and your financials dashboard. Use the button below to set your password and sign in. This link expires in 72 hours.</p>
+      ${button(opts.link, 'Set up your login')}
+      <p style="font-size:12.5px;color:#6f6a62;margin:20px 0 0;word-break:break-all">Or paste this into your browser:<br>${opts.link}</p>
+    </div>
+    <p style="color:#6f6a62;font-size:12px;margin-top:20px">You're receiving this because GCO Partners manages your books. If you weren't expecting it, you can ignore this email.</p>`);
+  await sendEmail(to, `Your ${opts.orgName} client portal login`, html, `Link: ${opts.link}`);
+}
+
 /** Generic desk notification email (assignment, new cycle, query, review…).
  * Shares the invite/reset template. Never throws. */
 export async function deliverDeskNotificationEmail(

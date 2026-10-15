@@ -11,6 +11,9 @@ import type { FinancialsData } from '@/desk/financials/types';
 // membership-validated tenant) and only walks DOWN from those clients — a cycle
 // id from the URL is only honoured if it resolves back to one of them.
 //
+// GCO staff previewing a client from the desk use a { deskClientId } scope
+// instead; the desk route checks that staff member can see that client first.
+//
 // Only client-safe fields leave this module: no internal notes, people, review
 // checkboxes, internal questions or parser warnings.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,8 +75,14 @@ function monthLabel(period: string | null, fallback: string): string {
 
 const isOpen = (status: string | null) => status !== 'Resolved';
 
-async function clientEngagements(ctx: TenantContext) {
-  const clients = await prisma.deskClient.findMany({ where: { portalOrgId: ctx.orgId }, select: { id: true } });
+/** Whose portal: a signed-in client's tenant (TenantContext fits), or one desk client for a staff preview. */
+export type PortalScope = { orgId: string } | { deskClientId: string };
+
+async function clientEngagements(scope: PortalScope) {
+  const clients = await prisma.deskClient.findMany({
+    where: 'orgId' in scope ? { portalOrgId: scope.orgId } : { id: scope.deskClientId },
+    select: { id: true },
+  });
   if (!clients.length) return [];
   return prisma.deskEngagement.findMany({
     where: { client: { in: clients.map((c) => c.id) } },
@@ -86,8 +95,8 @@ export async function isLinkedToDesk(ctx: TenantContext): Promise<boolean> {
   return (await prisma.deskClient.count({ where: { portalOrgId: ctx.orgId } })) > 0;
 }
 
-export async function listPortalCycles(ctx: TenantContext): Promise<PortalCycleSummary[]> {
-  const engagements = await clientEngagements(ctx);
+export async function listPortalCycles(scope: PortalScope): Promise<PortalCycleSummary[]> {
+  const engagements = await clientEngagements(scope);
   if (!engagements.length) return [];
   const byId = new Map(engagements.map((e) => [e.id, e]));
   const cycles = await prisma.deskCycle.findMany({
@@ -119,8 +128,8 @@ export async function listPortalCycles(ctx: TenantContext): Promise<PortalCycleS
     .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''));
 }
 
-export async function getPortalCycle(ctx: TenantContext, cycleId: string): Promise<PortalCycleDetail | null> {
-  const summaries = await listPortalCycles(ctx);
+export async function getPortalCycle(scope: PortalScope, cycleId: string): Promise<PortalCycleDetail | null> {
+  const summaries = await listPortalCycles(scope);
   const summary = summaries.find((s) => s.id === cycleId);
   if (!summary) return null; // not this tenant's, or doesn't exist — same answer
 
@@ -150,8 +159,8 @@ export async function getPortalCycle(ctx: TenantContext, cycleId: string): Promi
 }
 
 /** Delivered cycles that have a dashboard, newest first, plus the chosen one's data. */
-export async function getPortalFinancials(ctx: TenantContext, cycleId?: string | null) {
-  const published = (await listPortalCycles(ctx)).filter((c) => c.hasFinancials);
+export async function getPortalFinancials(scope: PortalScope, cycleId?: string | null) {
+  const published = (await listPortalCycles(scope)).filter((c) => c.hasFinancials);
   const chosen = published.find((c) => c.id === cycleId) ?? published[0] ?? null;
   if (!chosen) return { published, chosen: null, data: null, updatedAt: null };
   const fin = await prisma.deskFinancials.findFirst({
