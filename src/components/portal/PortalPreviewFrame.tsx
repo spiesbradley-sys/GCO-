@@ -10,8 +10,8 @@ import { previewBase, type PreviewClient } from '@/lib/portal/preview';
 export function PortalPreviewFrame({ client, active, children }: { client: PreviewClient; active: 'cycles' | 'financials'; children: ReactNode }) {
   const base = previewBase(client.id);
   const tabs = [
-    { key: 'cycles', label: 'Cycles', href: `${base}/cycles` },
-    { key: 'financials', label: 'Financials', href: `${base}/financials` },
+    { key: 'financials', label: 'CFO dashboard', href: `${base}/financials` },
+    { key: 'cycles', label: 'Monthly close', href: `${base}/cycles` },
   ] as const;
 
   return (

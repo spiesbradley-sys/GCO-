@@ -13,7 +13,7 @@ export default async function PreviewCyclePage({ params }: { params: { id: strin
   if (!cycle) notFound();
   return (
     <PortalPreviewFrame client={client} active="cycles">
-      <CycleDetailView cycle={cycle} cyclesHref={`${previewBase(client.id)}/cycles`} showFinancials />
+      <CycleDetailView cycle={cycle} cyclesHref={`${previewBase(client.id)}/cycles`} dashboardHref={`${previewBase(client.id)}/financials`} />
     </PortalPreviewFrame>
   );
 }

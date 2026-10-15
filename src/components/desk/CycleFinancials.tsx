@@ -6,13 +6,11 @@ import { IconAlert, IconUpload } from '@/components/ui/icons';
 import { useToast } from '@/components/ui/Toast';
 import type { FinancialsSummary } from '@/app/api/desk/cycles/[id]/financials/route';
 
-// "Client dashboard" section of a cycle's drawer: upload the GCO monthly
-// financials workbook for this cycle and see what was read from it. The client
-// sees the figures in their portal once the cycle is Delivered.
+// Top of a cycle's drawer on the desk: where accountants upload the month's
+// financials workbook (.xlsx). The client's CFO dashboard updates as soon as it's
+// uploaded; re-uploading replaces it.
 
-const VISIBLE_STAGES = ['Delivered', 'Meeting Held', 'Closed'];
-
-export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string; stage: string | null; canWrite: boolean }) {
+export function CycleFinancials({ cycleId, canWrite }: { cycleId: string; canWrite: boolean }) {
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [latest, setLatest] = useState<FinancialsSummary | null | undefined>(undefined);
@@ -42,7 +40,7 @@ export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string;
       if (!res.ok) setError(j.error ?? 'Upload failed. Try again.');
       else {
         setLatest(j.latest);
-        toast.success('Financials uploaded.');
+        toast.success('Excel uploaded. The client’s dashboard is updated.');
       }
     } catch {
       setError('Upload failed. Check your connection and try again.');
@@ -52,11 +50,10 @@ export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string;
     }
   }
 
-  const live = stage ? VISIBLE_STAGES.includes(stage) : false;
 
   return (
     <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
-      <p className="text-[11px] font-semibold uppercase tracking-header text-ink-tertiary">Client dashboard</p>
+      <p className="text-[11px] font-semibold uppercase tracking-header text-ink-tertiary">Client CFO dashboard · financials Excel</p>
 
       {latest === undefined ? (
         <div className="h-12 rounded-input bg-surface-sunken" aria-hidden />
@@ -64,9 +61,7 @@ export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string;
         <div className="flex flex-col gap-1 rounded-input border border-border-subtle px-3 py-2 text-[13px]">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="font-semibold text-ink">{latest.periodLabel ?? 'Period not found'}</span>
-            <span className={cn('text-[12px] font-semibold', live ? 'text-favorable' : 'text-watch')}>
-              {live ? 'Visible to client' : 'Hidden until Delivered'}
-            </span>
+            <span className="text-[12px] font-semibold text-favorable">Live on the client’s dashboard</span>
           </div>
           <span className="text-ink-secondary">
             Net revenue {latest.netRevenue != null ? formatCurrencyWhole(latest.netRevenue) : '—'} · Net income{' '}
@@ -83,7 +78,7 @@ export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string;
           ))}
         </div>
       ) : (
-        <p className="text-[13px] text-ink-tertiary">No financials yet. Upload this period’s financials workbook to build the client’s dashboard.</p>
+        <p className="text-[13px] text-ink-tertiary">No Excel yet. Upload this month’s financials workbook and the client’s CFO dashboard updates straight away.</p>
       )}
 
       {canWrite && (
@@ -106,7 +101,7 @@ export function CycleFinancials({ cycleId, stage, canWrite }: { cycleId: string;
           )}
         >
           <IconUpload width={16} height={16} className="text-ink-tertiary" />
-          <span className="font-semibold text-ink">{busy ? 'Reading workbook…' : latest ? 'Replace financials workbook' : 'Upload financials workbook'}</span>
+          <span className="font-semibold text-ink">{busy ? 'Reading workbook…' : latest ? 'Replace the Excel' : 'Upload the financials Excel'}</span>
           <span className="text-[12px] text-ink-tertiary">.xlsx, up to 10 MB. Drop it here or choose a file.</span>
           <input
             ref={input}

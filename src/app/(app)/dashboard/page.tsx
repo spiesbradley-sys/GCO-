@@ -1,4 +1,6 @@
-import { requirePermission } from '@/lib/context';
+import { redirect } from 'next/navigation';
+import { requirePermission, requireTenantContext } from '@/lib/context';
+import { can } from '@/lib/rbac';
 import { PageHeader } from '@/components/shell/PageHeader';
 import { KpiCard } from '@/components/ui/KpiCard';
 import { Card, CardTitle } from '@/components/ui/Card';
@@ -10,6 +12,10 @@ import { formatCurrencyWhole } from '@/lib/utils';
 // then respects the period selector. Data reads happen server-side under the
 // tenant guard.
 export default async function DashboardPage() {
+  // Clients only have the CFO dashboard; send them (and any other role without
+  // this overview) straight there instead of a 403.
+  const base = await requireTenantContext();
+  if (!can(base.effectiveRole, 'dashboard.view') && can(base.effectiveRole, 'analytics.view')) redirect('/dashboard/cfo');
   const ctx = await requirePermission('dashboard.view');
   const db = ctx.db;
 

@@ -18,9 +18,6 @@ import type { FinancialsData } from '@/desk/financials/types';
 // checkboxes, internal questions or parser warnings.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Desk stages at or after which the client sees the cycle's financials. */
-export const DELIVERED_STAGES = ['Delivered', 'Meeting Held', 'Closed'];
-
 /** Query types a client is asked about. "Internal question" never leaves the desk. */
 const CLIENT_QUERY_TYPES = ['Client query', 'Missing documentation', 'Access issue', 'Bank feed disconnected'];
 
@@ -62,9 +59,6 @@ export type PortalCycleSummary = {
 
 export type PortalCycleDetail = PortalCycleSummary & {
   requests: { id: string; title: string; type: string | null; status: string | null; raised: string | null; resolved: string | null; details: string | null }[];
-  deliverables: { id: string; title: string; type: string | null; delivered: string | null }[];
-  financials: FinancialsData | null;
-  financialsUpdatedAt: string | null;
 };
 
 function monthLabel(period: string | null, fallback: string): string {
@@ -122,7 +116,8 @@ export async function listPortalCycles(scope: PortalScope): Promise<PortalCycleS
         delivered: c.delivered,
         meeting: c.meeting,
         openRequests: c.queries.filter((q) => CLIENT_QUERY_TYPES.includes(q.type ?? '') && isOpen(q.status)).length,
-        hasFinancials: c.financials.length > 0 && DELIVERED_STAGES.includes(c.stage ?? ''),
+        // Live as soon as the accountant uploads the workbook on the desk.
+        hasFinancials: c.financials.length > 0,
       };
     })
     .sort((a, b) => (b.period ?? '').localeCompare(a.period ?? ''));
@@ -133,32 +128,19 @@ export async function getPortalCycle(scope: PortalScope, cycleId: string): Promi
   const summary = summaries.find((s) => s.id === cycleId);
   if (!summary) return null; // not this tenant's, or doesn't exist — same answer
 
-  const [queries, deliverables, fin] = await Promise.all([
-    prisma.deskQuery.findMany({
-      where: { cycle: cycleId, type: { in: CLIENT_QUERY_TYPES } },
-      select: { id: true, name: true, type: true, status: true, raised: true, resolved: true, details: true },
-      orderBy: { raised: 'desc' },
-    }),
-    prisma.deskDeliverable.findMany({
-      where: { cycle: cycleId },
-      select: { id: true, name: true, type: true, delivered: true },
-      orderBy: { delivered: 'desc' },
-    }),
-    summary.hasFinancials
-      ? prisma.deskFinancials.findFirst({ where: { cycle: cycleId }, orderBy: { createdAt: 'desc' }, select: { data: true, createdAt: true } })
-      : null,
-  ]);
+  const queries = await prisma.deskQuery.findMany({
+    where: { cycle: cycleId, type: { in: CLIENT_QUERY_TYPES } },
+    select: { id: true, name: true, type: true, status: true, raised: true, resolved: true, details: true },
+    orderBy: { raised: 'desc' },
+  });
 
   return {
     ...summary,
     requests: queries.map((q) => ({ id: q.id, title: q.name, type: q.type, status: q.status, raised: q.raised, resolved: q.resolved, details: q.details })),
-    deliverables: deliverables.map((d) => ({ id: d.id, title: d.name, type: d.type, delivered: d.delivered })),
-    financials: (fin?.data as FinancialsData | undefined) ?? null,
-    financialsUpdatedAt: fin?.createdAt.toISOString() ?? null,
   };
 }
 
-/** Delivered cycles that have a dashboard, newest first, plus the chosen one's data. */
+/** Cycles with an uploaded workbook, newest first, plus the chosen one's dashboard data. */
 export async function getPortalFinancials(scope: PortalScope, cycleId?: string | null) {
   const published = (await listPortalCycles(scope)).filter((c) => c.hasFinancials);
   const chosen = published.find((c) => c.id === cycleId) ?? published[0] ?? null;

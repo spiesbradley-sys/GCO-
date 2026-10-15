@@ -28,19 +28,9 @@ export type Permission =
   | 'audit.view';
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  client: [
-    'dashboard.view',
-    'analytics.view',
-    'cycles.view',
-    'invoices.view',
-    'invoices.pay',
-    'connections.view',
-    'connections.manage',
-    'messages.view',
-    'messages.send',
-    'documents.view',
-    'documents.upload',
-  ],
+  // Clients see two things only: their CFO dashboard (built from the financials
+  // workbook the accountant uploads on the desk) and how their monthly close is going.
+  client: ['analytics.view', 'cycles.view'],
   accountant: [
     'dashboard.view',
     'analytics.view',

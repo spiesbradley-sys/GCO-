@@ -29,13 +29,13 @@ export function AcceptInviteForm({ token, email, needsPassword }: { token: strin
         return;
       }
       if (!res.passwordSet) {
-        router.push(`/login?callbackUrl=${encodeURIComponent('/cycles')}`);
+        router.push(`/login?callbackUrl=${encodeURIComponent('/dashboard/cfo')}`);
         return;
       }
       const signedIn = await signIn('credentials', { email: res.email, password, redirect: false });
       if (!signedIn || signedIn.error) router.push('/login');
       else {
-        router.push('/cycles');
+        router.push('/dashboard/cfo');
         router.refresh();
       }
     });

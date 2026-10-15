@@ -110,10 +110,13 @@ export function RecordDrawer({
         {/* title */}
         <DeskField field={nameField} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} prominent />
 
+        {/* the month's financials Excel → the client's CFO dashboard; kept at the top so it's the first thing accountants see */}
+        {board === 'cycles' && <CycleFinancials cycleId={record.id as string} canWrite={canWrite} />}
+
         {board === 'clients' && (
           <div>
             <Link
-              href={`/desk/clients/${record.id as string}/portal/cycles`}
+              href={`/desk/clients/${record.id as string}/portal/financials`}
               className="inline-flex h-8 items-center gap-2 rounded-pill border border-border-default bg-surface-card px-4 font-heading text-[14px] font-semibold text-ink transition-colors duration-fast hover:bg-surface-cream focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-secondary"
             >
               View client portal
@@ -165,9 +168,6 @@ export function RecordDrawer({
             );
           })()}
 
-        {board === 'cycles' && (
-          <CycleFinancials cycleId={record.id as string} stage={(record.stage as string) ?? null} canWrite={canWrite} />
-        )}
         {board === 'clients' && (
           <ClientPortalLink clientId={record.id as string} portalOrgId={(record.portalOrgId as string) ?? null} role={role} />
         )}

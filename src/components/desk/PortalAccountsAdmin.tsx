@@ -107,7 +107,7 @@ export function PortalAccountsAdmin({ rows, orgs }: { rows: AccountRow[]; orgs: 
                     <td className="px-4 py-3 text-right tabular-nums text-ink">{r.portalOrgId ? r.pendingInvites : '—'}</td>
                     <td className="whitespace-nowrap px-4 py-3 text-right">
                       <Link
-                        href={`/desk/clients/${r.id}/portal/cycles`}
+                        href={`/desk/clients/${r.id}/portal/financials`}
                         className="mr-3 text-[13px] font-semibold text-accent-secondary hover:text-accent-primary-hover"
                       >
                         View portal

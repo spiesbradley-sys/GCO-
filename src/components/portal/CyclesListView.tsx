@@ -16,8 +16,8 @@ export function CyclesListView({ cycles, base, emptyBody }: { cycles: PortalCycl
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        eyebrow="Month-end close"
-        title="Cycles"
+        eyebrow="Your books"
+        title="Monthly close"
         description={
           waiting
             ? `${waiting} open ${waiting === 1 ? 'request needs' : 'requests need'} your input before we can finish a close.`
@@ -27,7 +27,7 @@ export function CyclesListView({ cycles, base, emptyBody }: { cycles: PortalCycl
 
       {cycles.length === 0 ? (
         <Card>
-          <EmptyState icon={<IconDocument width={22} height={22} />} title="No cycles yet" body={emptyBody} />
+          <EmptyState icon={<IconDocument width={22} height={22} />} title="Nothing to show yet" body={emptyBody} />
         </Card>
       ) : (
         <Card className="p-0">

@@ -20,14 +20,13 @@ export const NAV: NavGroup[] = [
     label: 'Overview',
     items: [
       { label: 'Dashboard', href: '/dashboard', permission: 'dashboard.view', icon: 'grid' },
-      { label: 'Financials', href: '/financials', permission: 'analytics.view', icon: 'grid' },
       { label: 'CFO dashboard', href: '/dashboard/cfo', permission: 'analytics.view', icon: 'grid' },
     ],
   },
   {
     label: 'Close',
     items: [
-      { label: 'Cycles', href: '/cycles', permission: 'cycles.view', icon: 'document' },
+      { label: 'Monthly close', href: '/cycles', permission: 'cycles.view', icon: 'document' },
       { label: 'Invoices', href: '/invoices', permission: 'invoices.view', icon: 'invoice' },
       { label: 'Connections', href: '/connections', permission: 'connections.view', icon: 'link' },
     ],

@@ -5,5 +5,5 @@ export const dynamic = 'force-dynamic';
 
 export default async function PortalPreviewIndex({ params }: { params: { id: string } }) {
   await requireClientPreview(params.id);
-  redirect(`${previewBase(params.id)}/cycles`);
+  redirect(`${previewBase(params.id)}/financials`);
 }
