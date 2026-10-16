@@ -881,9 +881,13 @@ model DeskEngagement {
   slaDelivery Int?
   slaMeeting  Int?
   slaQuery    Int?
-  /// Monthly load this engagement puts on each assigned person, in utilization
-  /// points. Null = use the default weights (see src/desk/utilization.ts).
+  /// Unused. Former utilization "load points"; utilization now measures logged
+  /// hours against DeskUser.monthlyHours. Off the board; kept until dropped.
   capacity    Int?
+  /// Hours of controller time this engagement needs each month (budget).
+  controllerHours Int?
+  /// Hours of accountant time this engagement needs each month (budget).
+  accountantHours Int?
   /// How often a cycle is closed: "Monthly" (default when null) or "Quarterly"
   /// (one cycle per quarter-end month — Mar, Jun, Sep, Dec).
   frequency   String?

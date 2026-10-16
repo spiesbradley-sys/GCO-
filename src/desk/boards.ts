@@ -49,6 +49,7 @@ export type Field = {
   calc?: 'rack' | 'dealClock' | 'margin' | 'marginPct' | 'queryAge' | 'blockers';
   money?: boolean; // calc renders as money
   num?: boolean; // calc renders right-aligned numeric
+  sum?: boolean; // num field is summed in table totals
 };
 
 export type View = {
@@ -210,7 +211,8 @@ export const BOARDS: Record<BoardKey, Board> = {
       { k: 'slaMeeting', l: 'SLA: Meeting (BD from delivery)', t: 'num' },
       { k: 'slaQuery', l: 'SLA: Query response (BD)', t: 'num' },
       { k: 'frequency', l: 'Delivery Frequency', t: 'select', o: o([['Monthly', 'green'], ['Quarterly', 'purple']]), lock: ['controller', 'management', 'owner'], hint: 'Blank = Monthly. Quarterly engagements get one cycle per quarter (Mar, Jun, Sep, Dec).' },
-      { k: 'capacity', l: 'Capacity (load points)', t: 'num', lock: ['controller', 'management', 'owner'], hint: 'Monthly workload this engagement puts on each assigned person. Blank = default. A standard managed engagement is about 5; a white-label end client about 1.' },
+      { k: 'controllerHours', l: 'Controller hours / month', t: 'num', sum: true, lock: ['controller', 'management', 'owner'], hint: 'Financial controller time this engagement needs each month. For quarterly engagements, the monthly average.' },
+      { k: 'accountantHours', l: 'Accountant hours / month', t: 'num', sum: true, lock: ['controller', 'management', 'owner'], hint: 'Accountant time this engagement needs each month. For quarterly engagements, the monthly average.' },
       { k: 'controller', l: 'Financial Controller', t: 'person', pr: ['controller', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'Sees this engagement; controllers see all. Set by controllers/management.' },
       { k: 'bookkeeper', l: 'Accountant', t: 'person', pr: ['accountant', 'management', 'owner'], lock: ['controller', 'management', 'owner'], hint: 'The assigned accountant sees only engagements assigned to them. Set by controllers/management.' },
       { k: 'start', l: 'Start Date', t: 'date' },
@@ -220,7 +222,7 @@ export const BOARDS: Record<BoardKey, Board> = {
     ],
     back: [{ b: 'cycles', k: 'engagement', l: 'Monthly Cycles' }],
     views: [
-      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'endClient', 'service', 'status', 'frequency', 'fee', 'slaDelivery', 'bookkeeper'] },
+      { n: 'All engagements', type: 'table', cols: ['name', 'client', 'endClient', 'service', 'status', 'frequency', 'fee', 'controllerHours', 'accountantHours', 'slaDelivery', 'bookkeeper'], totals: true },
       { n: 'By service', type: 'board', group: 'service', cardMeta: ['status', 'fee'] },
     ],
   },

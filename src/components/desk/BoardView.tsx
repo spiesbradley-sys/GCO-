@@ -194,6 +194,10 @@ function BoardTable({
         const sum = rows.reduce((a, r) => a + (Number(r[f.k]) || 0), 0);
         return { k: f.k, v: sum, money: true };
       }
+      if (f.t === 'num' && f.sum) {
+        const sum = rows.reduce((a, r) => a + (Number(r[f.k]) || 0), 0);
+        return { k: f.k, v: sum, money: false };
+      }
       return null;
     });
 
@@ -251,7 +255,7 @@ function BoardTable({
                   const tot = totals.find((t) => t && t.k === f.k);
                   return (
                     <td key={f.k} className="px-4 py-2.5 text-right font-semibold tnum">
-                      {tot ? '$' + Math.round((tot.v as number) / 100).toLocaleString('en-US') : ''}
+                      {tot ? (tot.money ? '$' + Math.round((tot.v as number) / 100).toLocaleString('en-US') : (tot.v as number).toLocaleString('en-US')) : ''}
                     </td>
                   );
                 })}

@@ -49,7 +49,9 @@ export function RecordDrawer({
   const [armed, setArmed] = useState(false);
 
   const nameField = B.fields.find((f) => f.t === 'title')!;
-  const shortFields = B.fields.filter((f) => f.t !== 'title' && f.t !== 'long');
+  // Engagement hours get their own section rather than a row in the field grid.
+  const hoursFields = board === 'engagements' ? B.fields.filter((f) => HOURS_KEYS.includes(f.k)) : [];
+  const shortFields = B.fields.filter((f) => f.t !== 'title' && f.t !== 'long' && !hoursFields.includes(f));
   const longFields = B.fields.filter((f) => f.t === 'long');
   const warnings = recordWarnings(board, record, data);
   const stamp = String(record.updatedAt ?? '');
@@ -122,6 +124,10 @@ export function RecordDrawer({
               View client portal
             </Link>
           </div>
+        )}
+
+        {hoursFields.length > 0 && (
+          <HoursRequired fields={hoursFields} record={record} data={data} users={users} role={role} canWrite={canWrite} onPatch={patch} onOpen={onOpen} />
         )}
 
         {/* short fields */}
@@ -212,6 +218,37 @@ export function RecordDrawer({
         <Discussion board={board} recordId={record.id as string} users={users} role={role} />
       </div>
     </Drawer>
+  );
+}
+
+const HOURS_KEYS = ['controllerHours', 'accountantHours'];
+
+/** Budgeted monthly hours for an engagement, split by role, with the total. */
+function HoursRequired({ fields, ...rest }: Omit<Parameters<typeof DeskField>[0], 'field'> & { fields: Field[] }) {
+  const total = fields.reduce((a, f) => a + (Number(rest.record[f.k]) || 0), 0);
+  const anySet = fields.some((f) => rest.record[f.k] != null);
+  return (
+    <section aria-labelledby="hours-required" className="flex flex-col gap-3 rounded-card border border-border-subtle bg-surface-cream p-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 id="hours-required" className="text-[13px] font-semibold uppercase tracking-header text-ink-tertiary">
+          Hours required per month
+        </h3>
+        <p className="font-heading text-[15px] font-bold text-ink tnum">{anySet ? `${total.toLocaleString('en-US')} h total` : 'Not set'}</p>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        {fields.map((f) => (
+          <div key={f.k} className="flex flex-col gap-1">
+            <label htmlFor={`f-${f.k}`} className="text-[13px] font-semibold text-ink">
+              {f.l.replace(' / month', '')}
+            </label>
+            <DeskField field={f} {...rest} />
+          </div>
+        ))}
+      </div>
+      <p className="text-[12.5px] leading-snug text-ink-tertiary">
+        Whole hours each month. For quarterly engagements, enter the monthly average. Set by controllers and management.
+      </p>
+    </section>
   );
 }
 
