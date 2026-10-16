@@ -156,7 +156,7 @@ export const BOARDS: Record<BoardKey, Board> = {
       'One row per client: the entity of record, how to reach them, what they run on, and whether we are fully live.',
     fields: [
       { k: 'name', l: 'Client Name', t: 'title' },
-      { k: 'status', l: 'Status', t: 'select', o: o([['Prospect'], ['Pilot', 'yellow'], ['Ongoing', 'green'], ['Offboarded', 'red']]) },
+      { k: 'status', l: 'Status', t: 'select', o: o([['Prospect'], ['Contracting', 'purple'], ['Onboarding', 'blue'], ['Pilot', 'yellow'], ['Ongoing', 'green'], ['Offboarded', 'red']]) },
       { k: 'legal', l: 'Legal Entity', t: 'text' },
       { k: 'location', l: 'Location', t: 'text' },
       { k: 'contact', l: 'Primary Contact', t: 'text' },
