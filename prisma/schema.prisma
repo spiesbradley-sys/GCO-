@@ -668,10 +668,14 @@ model DeskUser {
   lastLoginAt       DateTime?
   /// Sessions created before this are invalid (logout-everywhere on pw change).
   passwordChangedAt DateTime?
+  /// Hours this person is available per month (utilization capacity). Null =
+  /// the role default (see DEFAULT_MONTHLY_HOURS in src/desk/utilization.ts).
+  monthlyHours      Int?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
-  sessions DeskSession[]
+  sessions    DeskSession[]
+  timeEntries DeskTimeEntry[]
 
   @@map("desk_users")
 }
@@ -971,6 +975,26 @@ model DeskQuery {
   cycleRecord DeskCycle? @relation(fields: [cycle], references: [id])
 
   @@map("desk_queries")
+}
+
+/// Hours a staff member logged on a day. engagement = null is internal time
+/// (admin, training), always non-billable. Feeds the monthly utilization view.
+model DeskTimeEntry {
+  id         String   @id @default(cuid())
+  user       String // FK -> DeskUser.id
+  engagement String? // DeskEngagement.id; null = internal
+  date       String // YYYY-MM-DD, like the other desk dates
+  hours      Float
+  billable   Boolean  @default(true)
+  note       String?
+  createdAt  DateTime @default(now())
+  createdBy  String?
+
+  userRecord DeskUser @relation(fields: [user], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([user, date])
+  @@map("desk_time_entries")
 }
 
 model DeskDeliverable {

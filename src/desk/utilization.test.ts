@@ -1,8 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import type { DeskData } from './insights';
-import { utilization, utilBand, personUtilization, visiblePeople, WEIGHTS, CAPACITY, WHITE_LABEL_DEFAULT, CONTROLLER_SHARE } from './utilization';
+import {
+  utilization,
+  utilBand,
+  personMonth,
+  visiblePeople,
+  capacityFor,
+  isBillable,
+  shiftMonth,
+  monthRange,
+  parseMonth,
+  monthLabel,
+  loggableEngagements,
+  DEFAULT_MONTHLY_HOURS,
+  type TimeEntry,
+} from './utilization';
 
-const TODAY = '2026-10-14'; // a Wednesday
+const MONTH = '2026-10';
 
 const users = [
   { id: 'a1', name: 'Ann', email: 'ann@x.co', role: 'accountant', isActive: true },
@@ -15,29 +29,58 @@ const users = [
 
 const data: DeskData = {
   intake: [],
-  clients: [],
+  clients: [
+    { id: 'std', name: 'Northside Dental' },
+    { id: 'vin', name: 'Vincere Tax', whiteLabel: true },
+  ],
   deliverables: [],
   deals: [],
   pnl: [],
   users,
   engagements: [
-    { id: 'e1', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-    { id: 'e2', status: 'Pilot', bookkeeper: 'a2', controller: 'c2' },
-    { id: 'e3', status: 'Ended', bookkeeper: 'a1', controller: 'c1' }, // not counted
+    { id: 'e1', name: 'Northside — managed', client: 'std', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
+    { id: 'e2', name: 'Pilot', client: 'std', status: 'Pilot', bookkeeper: 'a2', controller: 'c2' },
+    { id: 'w1', name: 'Acme (via Vincere)', client: 'vin', endClient: 'Acme Dental', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
+    { id: 'w2', name: 'Bright (via Vincere)', client: 'vin', endClient: 'Bright Smiles', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
   ],
-  cycles: [
-    // e1: capture not done → one accountant review; overdue
-    { id: 'cy1', engagement: 'e1', stage: 'Capture', capture: false, slaDue: '2026-10-10', slaStatus: 'At risk' },
-    // e1: at Review with both prior gates done → controller review only; due in 2 BD
-    { id: 'cy2', engagement: 'e1', stage: 'Review', capture: true, bkReview: true, ctrlReview: false, slaDue: '2026-10-16' },
-    // closed → ignored
-    { id: 'cy3', engagement: 'e1', stage: 'Closed', slaDue: '2026-09-10' },
-  ],
-  queries: [
-    { id: 'q1', owner: 'a1', status: 'Open' },
-    { id: 'q2', owner: 'a1', status: 'Resolved' },
-  ],
+  cycles: [],
+  queries: [],
 };
+
+const t = (id: string, user: string, engagement: string | null, date: string, hours: number, billable = true): TimeEntry => ({ id, user, engagement, date, hours, billable });
+
+const entries: TimeEntry[] = [
+  t('t1', 'a1', 'e1', '2026-10-01', 60),
+  t('t2', 'a1', 'w1', '2026-10-15', 20),
+  t('t3', 'a1', 'w2', '2026-10-31', 10),
+  t('t4', 'a1', null, '2026-10-02', 8), // internal, flag ignored
+  t('t5', 'a1', 'e1', '2026-10-03', 4, false), // non-billable client time
+  t('t6', 'a1', 'e1', '2026-09-30', 99), // previous month
+  t('t7', 'a1', 'e1', '2026-11-01', 99), // next month
+  t('t8', 'c1', 'e1', '2026-10-05', 12),
+  t('t9', 'a2', 'e2', '2026-10-05', 30),
+];
+
+describe('months', () => {
+  it('shifts across year ends', () => {
+    expect(shiftMonth('2026-01', -1)).toBe('2025-12');
+    expect(shiftMonth('2026-12', 1)).toBe('2027-01');
+    expect(shiftMonth('2026-10', 0)).toBe('2026-10');
+  });
+  it('knows the last day, including leap February', () => {
+    expect(monthRange('2026-10')).toEqual({ first: '2026-10-01', last: '2026-10-31' });
+    expect(monthRange('2028-02').last).toBe('2028-02-29');
+  });
+  it('rejects malformed months', () => {
+    expect(parseMonth('2026-13', MONTH)).toBe(MONTH);
+    expect(parseMonth('oct', MONTH)).toBe(MONTH);
+    expect(parseMonth(undefined, MONTH)).toBe(MONTH);
+    expect(parseMonth('2026-09', MONTH)).toBe('2026-09');
+  });
+  it('labels a month', () => {
+    expect(monthLabel('2026-10')).toBe('October 2026');
+  });
+});
 
 describe('utilBand', () => {
   it('bands by percentage', () => {
@@ -45,139 +88,44 @@ describe('utilBand', () => {
   });
 });
 
-describe('personUtilization', () => {
-  it('weights engagements, cycles, reviews, queries and overdue for an accountant', () => {
-    const r = personUtilization(data, users[0], TODAY);
-    expect(r).toMatchObject({ engagements: 1, cycles: 2, reviews: 1, queries: 1, overdue: 1, dueSoon: 1 });
-    const pts = 1 * WEIGHTS.engagement + 2 * WEIGHTS.cycle + 1 * WEIGHTS.review + 1 * WEIGHTS.query + 1 * WEIGHTS.overdue;
-    expect(r.points).toBe(pts);
-    expect(r.pct).toBe(Math.round((pts / CAPACITY.accountant) * 100));
+describe('capacity', () => {
+  it('uses the person’s monthly hours when set', () => {
+    expect(capacityFor('accountant', 100)).toEqual({ capacity: 100, isDefault: false });
   });
-  it('gives the controller review to the controller, not the accountant', () => {
-    expect(personUtilization(data, users[2], TODAY).reviews).toBe(1);
-  });
-  it('is idle with no assignments', () => {
-    const r = personUtilization({ ...data, engagements: [], queries: [] }, users[0], TODAY);
-    expect(r.points).toBe(0);
-    expect(r.band).toBe('idle');
+  it('falls back to the role default when blank or zero', () => {
+    expect(capacityFor('controller', null)).toEqual({ capacity: DEFAULT_MONTHLY_HOURS.controller, isDefault: true });
+    expect(capacityFor('controller', 0).isDefault).toBe(true);
   });
 });
 
-describe('engagement capacity', () => {
-  it('replaces the default engagement + cycle weights when set; reviews/overdue still add', () => {
-    const d: DeskData = { ...data, engagements: data.engagements.map((e) => (e.id === 'e1' ? { ...e, capacity: 10 } : e)) };
-    const line = personUtilization(d, users[0], TODAY).groups[0].lines[0];
-    expect(line).toMatchObject({ capacity: 10, baseline: 10, usingDefault: false });
-    // 10 baseline + 1 review + 2 overdue (cycles no longer add 3 each)
-    expect(line.points).toBe(10 + WEIGHTS.review + WEIGHTS.overdue);
-  });
-  it('treats a blank or negative capacity as unset', () => {
-    const d: DeskData = { ...data, engagements: data.engagements.map((e) => (e.id === 'e1' ? { ...e, capacity: -3 } : e)) };
-    expect(personUtilization(d, users[0], TODAY).groups[0].lines[0].usingDefault).toBe(true);
-  });
-  it('counts a query once: on its engagement, not again as "other"', () => {
-    const d: DeskData = { ...data, queries: [{ id: 'q9', owner: 'a1', status: 'Open', cycle: 'cy1' }] };
-    const r = personUtilization(d, users[0], TODAY);
-    expect(r.queries).toBe(1);
-    expect(r.otherQueries).toBe(0);
-    expect(r.groups[0].lines[0].queries).toBe(1);
+describe('billable', () => {
+  it('internal time is never billable', () => {
+    expect(isBillable(t('x', 'a1', null, '2026-10-01', 1, true))).toBe(false);
+    expect(isBillable(t('x', 'a1', 'e1', '2026-10-01', 1, true))).toBe(true);
+    expect(isBillable(t('x', 'a1', 'e1', '2026-10-01', 1, false))).toBe(false);
   });
 });
 
-describe('white-label client', () => {
-  const wl: DeskData = {
-    ...data,
-    clients: [
-      { id: 'vin', name: 'Vincere Tax', whiteLabel: true },
-      { id: 'std', name: 'Standard Co', whiteLabel: false },
-    ],
-    engagements: [
-      { id: 'w1', name: 'Vincere — Alpha', client: 'vin', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 'w2', name: 'Vincere — Beta', client: 'vin', status: 'Active', bookkeeper: 'a1', controller: 'c1', capacity: 3 },
-      { id: 's1', name: 'Standard', client: 'std', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-    ],
-    cycles: [
-      { id: 'wc1', engagement: 'w1', stage: 'Capture', capture: true, bkReview: true },
-      { id: 'wc2', engagement: 'w2', stage: 'Capture', capture: true, bkReview: true },
-    ],
-    queries: [],
-  };
-
-  it('defaults an end-client engagement to WHITE_LABEL_DEFAULT and ignores per-cycle weight', () => {
-    const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
-    const alpha = lines.find((l) => l.id === 'w1')!;
-    expect(alpha).toMatchObject({ baseline: WHITE_LABEL_DEFAULT, usingDefault: true, whiteLabel: true });
-    expect(alpha.points).toBe(WHITE_LABEL_DEFAULT);
+describe('personMonth', () => {
+  const inMonth = entries.filter((e) => e.date.startsWith(MONTH));
+  it('splits billable from non-billable and derives % from billable / capacity', () => {
+    const r = personMonth(data, users[0], inMonth, 120);
+    expect(r).toMatchObject({ billable: 90, nonBillable: 12, total: 102, capacity: 120, capacityIsDefault: false, pct: 75, band: 'healthy', entries: 5 });
   });
-  it('honours an explicit capacity on a white-label engagement', () => {
-    const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
-    expect(lines.find((l) => l.id === 'w2')!.baseline).toBe(3);
+  it('rolls a white-label client’s engagements into one line with end clients, Internal last', () => {
+    const r = personMonth(data, users[0], inMonth, null);
+    expect(r.clients.map((c) => c.label)).toEqual(['Northside Dental', 'Vincere Tax', 'Internal']);
+    const vin = r.clients.find((c) => c.key === 'vin')!;
+    expect(vin).toMatchObject({ whiteLabel: true, billable: 30, total: 30 });
+    expect(vin.endClients).toEqual([
+      { label: 'Acme Dental', total: 20 },
+      { label: 'Bright Smiles', total: 10 },
+    ]);
+    expect(r.clients.find((c) => c.key === 'internal')).toMatchObject({ billable: 0, nonBillable: 8 });
   });
-  it('rolls end-client engagements into one group, leaving standard clients separate', () => {
-    const groups = personUtilization(wl, users[0], TODAY).groups;
-    const g = groups.find((x) => x.whiteLabel)!;
-    expect(g.label).toBe('Vincere Tax');
-    expect(g.lines).toHaveLength(2);
-    expect(g.points).toBe(WHITE_LABEL_DEFAULT + 3);
-    expect(groups.filter((x) => !x.whiteLabel)).toHaveLength(1);
-  });
-  it('keeps the person total equal to the sum of their groups', () => {
-    const r = personUtilization(wl, users[0], TODAY);
-    expect(r.points).toBe(r.groups.reduce((a, g) => a + g.points, 0) + r.otherQueries);
-  });
-});
-
-describe('white-label engagements name their end client, which is not a client record', () => {
-  const wl: DeskData = {
-    ...data,
-    clients: [
-      { id: 'vin', name: 'Vincere Tax', whiteLabel: true },
-      { id: 'std', name: 'Standard Co' },
-    ],
-    engagements: [
-      { id: 'w1', name: 'Acme Dental (via Vincere Tax)', client: 'vin', endClient: 'Acme Dental', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 'w2', name: 'Bright Smiles (via Vincere Tax)', client: 'vin', endClient: 'Bright Smiles', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-      { id: 's1', name: 'Standard', client: 'std', endClient: 'Ignored', status: 'Active', bookkeeper: 'a1', controller: 'c1' },
-    ],
-    cycles: [],
-    queries: [],
-  };
-
-  it('carries the client (Vincere) and the end client on each white-label line', () => {
-    const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
-    expect(lines.find((l) => l.id === 'w1')).toMatchObject({ whiteLabel: true, client: 'Vincere Tax', endClient: 'Acme Dental' });
-  });
-  it('ignores an end client set on a non-white-label engagement', () => {
-    const lines = personUtilization(wl, users[0], TODAY).groups.flatMap((g) => g.lines);
-    expect(lines.find((l) => l.id === 's1')).toMatchObject({ whiteLabel: false, endClient: '' });
-  });
-  it('groups every engagement under the white-label client, labelled with that client', () => {
-    const groups = personUtilization(wl, users[0], TODAY).groups;
-    const g = groups.filter((x) => x.whiteLabel);
-    expect(g).toHaveLength(1);
-    expect(g[0].label).toBe('Vincere Tax');
-    expect(g[0].lines.map((l) => l.id).sort()).toEqual(['w1', 'w2']);
-  });
-});
-
-describe('controller share', () => {
-  it('a controller-only person carries CONTROLLER_SHARE of the standing load', () => {
-    const acc = personUtilization(data, users[0], TODAY).groups[0].lines[0]; // accountant, full share
-    const ctrl = personUtilization(data, users[2], TODAY).groups[0].lines[0]; // controller
-    expect(acc.share).toBe(1);
-    expect(ctrl.share).toBe(CONTROLLER_SHARE);
-    // same engagement: baseline identical, standing load scaled for the controller
-    expect(ctrl.baseline).toBe(acc.baseline);
-    expect(ctrl.points).toBe(acc.baseline * CONTROLLER_SHARE + ctrl.reviews * WEIGHTS.review + ctrl.queries * WEIGHTS.query + ctrl.overdue * WEIGHTS.overdue);
-  });
-  it('leaves reviews and overdue at full weight for the controller', () => {
-    const ctrl = personUtilization(data, users[2], TODAY).groups[0].lines[0];
-    expect(ctrl.reviews).toBe(1);
-    expect(ctrl.overdue).toBe(1);
-  });
-  it('someone who is both accountant and controller carries the full load', () => {
-    const d: DeskData = { ...data, engagements: [{ id: 'e1', status: 'Active', bookkeeper: 'c1', controller: 'c1' }] };
-    expect(personUtilization(d, users[2], TODAY).groups[0].lines[0].share).toBe(1);
+  it('is idle with no time logged', () => {
+    const r = personMonth(data, users[1], [], null);
+    expect(r).toMatchObject({ total: 0, pct: 0, band: 'idle', capacity: DEFAULT_MONTHLY_HOURS.accountant });
   });
 });
 
@@ -196,17 +144,46 @@ describe('visiblePeople', () => {
 });
 
 describe('utilization', () => {
-  it('sorts busiest first and summarizes', () => {
-    const u = utilization(data, { id: 'm1', role: 'management' }, TODAY);
-    expect(u.rows[0].id).toBe('a1');
-    expect(u.summary.people).toBe(u.rows.length);
-    expect(u.summary.overdue).toBe(u.rows.reduce((a, r) => a + r.overdue, 0));
+  const caps = { a1: 120 };
+
+  it('counts only entries inside the month', () => {
+    const u = utilization(data, { id: 'a1', role: 'accountant' }, MONTH, entries, caps);
+    expect(u.rows[0].total).toBe(102);
+    const sept = utilization(data, { id: 'a1', role: 'accountant' }, '2026-09', entries, caps);
+    expect(sept.rows[0].total).toBe(99);
   });
-  it('omits management with nothing assigned, but keeps idle delivery staff', () => {
-    const ids = utilization(data, { id: 'c1', role: 'controller' }, TODAY).rows.map((r) => r.id);
-    expect(ids).toContain('a1');
-    const all = utilization(data, { id: 'm1', role: 'management' }, TODAY).rows.map((r) => r.id);
-    expect(all).toContain('m1'); // the viewer is always shown
-    expect(utilization(data, { id: 'c1', role: 'controller' }, TODAY).rows.map((r) => r.id)).not.toContain('m1');
+  it('sorts busiest first and totals the team against summed capacity', () => {
+    const u = utilization(data, { id: 'm1', role: 'management' }, MONTH, entries, caps);
+    expect(u.rows[0].id).toBe('a1');
+    expect(u.summary.billable).toBe(90 + 12 + 30);
+    expect(u.summary.capacity).toBe(u.rows.reduce((a, r) => a + r.capacity, 0));
+    expect(u.summary.pct).toBe(Math.round((u.summary.billable / u.summary.capacity) * 100));
+  });
+  it('rolls hours up by client across people', () => {
+    const u = utilization(data, { id: 'm1', role: 'management' }, MONTH, entries, caps);
+    const north = u.clients.find((c) => c.key === 'std')!;
+    expect(north).toMatchObject({ billable: 60 + 12 + 30, nonBillable: 4, people: 3 });
+  });
+  it('never leaks hours of people the viewer cannot see', () => {
+    const u = utilization(data, { id: 'c1', role: 'controller' }, MONTH, entries, caps);
+    expect(u.rows.map((r) => r.id).sort()).toEqual(['a1', 'c1']);
+    expect(u.clients.find((c) => c.key === 'std')!.people).toBe(2); // a2's pilot hours excluded
+  });
+  it('omits management with no time, but keeps idle delivery staff and the viewer', () => {
+    const ids = utilization(data, { id: 'c1', role: 'controller' }, MONTH, [], {}).rows.map((r) => r.id);
+    expect(ids).toEqual(expect.arrayContaining(['a1', 'c1']));
+    const all = utilization(data, { id: 'c2', role: 'controller' }, MONTH, [], {}).rows.map((r) => r.id);
+    expect(all).not.toContain('m1');
+    expect(utilization(data, { id: 'm1', role: 'management' }, MONTH, [], {}).rows.map((r) => r.id)).toContain('m1');
+  });
+});
+
+describe('loggableEngagements', () => {
+  const withEnded: DeskData = { ...data, engagements: [...data.engagements, { id: 'old', status: 'Ended', bookkeeper: 'a1' }] };
+  it('accountants log only against active engagements assigned to them', () => {
+    expect(loggableEngagements(withEnded, { id: 'a2', role: 'accountant' }).map((e) => e.id)).toEqual(['e2']);
+  });
+  it('other roles can log against any active or pilot engagement', () => {
+    expect(loggableEngagements(withEnded, { id: 'c1', role: 'controller' }).map((e) => e.id)).toEqual(['e1', 'e2', 'w1', 'w2']);
   });
 });

@@ -1,49 +1,29 @@
-// Live workload utilization for desk staff. Derived on read from current
-// assignments (engagements, in-flight cycles, review gates, open queries) and
-// NEVER stored — same philosophy as compute.ts. There is no time tracking, so
-// "utilization" = weighted open workload / a per-role capacity.
+// Monthly utilization for desk staff, measured in hours. Derived on read from
+// logged time entries (desk_time_entries) and NEVER stored — same philosophy
+// as compute.ts.
 //
-// Each engagement can carry its own `capacity` (load points per month). When
-// set it REPLACES the default engagement + cycle weights for that engagement;
-// reviews, queries and overdue cycles still add on top so the report stays live.
-// Engagements under a white-label client (we do the work for THEIR clients,
-// e.g. Vincere) default to WHITE_LABEL_DEFAULT instead, and roll up in groups.
+//   utilization % = billable hours logged in the month / monthly capacity
 //
-// Tune WEIGHTS, CAPACITY and WHITE_LABEL_DEFAULT below; everything else follows.
+// Capacity is each person's `monthlyHours` (editable in Owner Admin → Staff),
+// falling back to DEFAULT_MONTHLY_HOURS for their role. Time on an engagement
+// is billable unless marked otherwise; internal time (no engagement) never is.
+// Hours also roll up by client; a white-label client's (Vincere's) end clients
+// sit under it.
 
-import { businessDays, todayISO, CYCLE_DONE, type Rec } from './compute';
-import { pendingCycleReviews, REVIEW_OWNER, type DeskData } from './insights';
+import type { Rec } from './compute';
+import type { DeskData } from './insights';
 import type { DeskRole } from './roles';
 
-/** Load points each kind of open work contributes. */
-export const WEIGHTS = {
-  engagement: 2, // standing relationship: active/pilot engagement you are assigned to
-  cycle: 3, // an in-flight monthly cycle on one of your engagements
-  review: 1, // a review gate waiting on you
-  query: 1, // an open query you own
-  overdue: 2, // extra on top of `cycle` when its SLA date has passed
-} as const;
-
-/** Monthly load of one end-client engagement under a white-label client when
- * no explicit capacity is set (Vincere: ~5 hrs/client vs ~5 pts for a standard
- * managed engagement). */
-export const WHITE_LABEL_DEFAULT = 1;
-
-/** Share of an engagement's standing load a controller carries when they are its
- * controller but not its accountant (the accountant does the production work).
- * Applies to the standing load only; reviews, queries and overdue count in full. */
-export const CONTROLLER_SHARE = 0.5;
-
-/** Round a points figure for display (shares can be fractional). */
-export const fmtPts = (n: number): string => String(Math.round(n * 10) / 10);
-
-/** Load points a person can carry at 100% utilization, by role. */
-export const CAPACITY: Record<DeskRole, number> = {
-  accountant: 24,
-  controller: 30,
-  management: 20,
-  owner: 12,
+/** Hours a person is available per month when Owner Admin hasn't set one. */
+export const DEFAULT_MONTHLY_HOURS: Record<DeskRole, number> = {
+  accountant: 140,
+  controller: 120,
+  management: 80,
+  owner: 40,
 };
+
+/** Largest single entry we accept (one day). */
+export const MAX_ENTRY_HOURS = 24;
 
 export type UtilBand = 'idle' | 'under' | 'healthy' | 'high' | 'over';
 
@@ -56,166 +36,165 @@ export function utilBand(pct: number): UtilBand {
   return 'over';
 }
 
-/** One engagement's contribution to a person's load. */
-export type UtilLine = {
-  id: string; // engagement id
-  name: string;
-  client: string; // the engagement's client (for a white-label engagement: the white-label client, e.g. Vincere)
-  endClient: string; // white label only: the underlying business we do the work for (not a GCO client)
-  whiteLabel: boolean;
-  capacity: number | null; // explicit value on the engagement, if any
-  baseline: number; // the ENGAGEMENT's standing load: explicit capacity, white-label default, or engagement + cycles
-  usingDefault: boolean; // true when no explicit capacity is set
-  share: number; // fraction of the baseline this person carries (1, or CONTROLLER_SHARE as controller-only)
-  cycles: number;
-  reviews: number;
-  queries: number;
-  overdue: number;
-  points: number;
+/** Round hours for display: whole numbers stay whole, otherwise one decimal. */
+export const fmtHours = (n: number): string => String(Math.round(n * 10) / 10);
+
+// ── Months ────────────────────────────────────────────────────────────────
+
+const MONTH_RE = /^(\d{4})-(0[1-9]|1[0-2])$/;
+
+/** 'YYYY-MM' of an ISO date ('YYYY-MM-DD'). */
+export const monthOf = (isoDate: string): string => isoDate.slice(0, 7);
+
+/** A valid 'YYYY-MM', or the fallback. */
+export function parseMonth(raw: string | undefined | null, fallback: string): string {
+  return raw && MONTH_RE.test(raw) ? raw : fallback;
+}
+
+/** Move a 'YYYY-MM' by n months. */
+export function shiftMonth(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const idx = y * 12 + (m - 1) + n;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`;
+}
+
+/** First and last ISO date of a month (inclusive). */
+export function monthRange(month: string): { first: string; last: string } {
+  const [y, m] = month.split('-').map(Number);
+  const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return { first: `${month}-01`, last: `${month}-${String(days).padStart(2, '0')}` };
+}
+
+/** "October 2026". */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+}
+
+// ── Report ────────────────────────────────────────────────────────────────
+
+export type TimeEntry = {
+  id: string;
+  user: string;
+  engagement: string | null;
+  date: string;
+  hours: number;
+  billable: boolean;
+  note?: string | null;
 };
 
-/** All of a white-label client's engagements roll up into one group, labelled
- * with that client; any other engagement is its own single-line group. */
-export type UtilGroup = { key: string; label: string; whiteLabel: boolean; lines: UtilLine[]; points: number };
+/** Hours on one client (or Internal) within a person's month or the client rollup. */
+export type HoursLine = {
+  key: string; // client id, or 'internal' / 'unknown'
+  label: string;
+  whiteLabel: boolean;
+  billable: number;
+  nonBillable: number;
+  total: number;
+  people: number; // distinct people who logged time here
+  /** White label only: hours per end client (the business we do the work for). */
+  endClients: { label: string; total: number }[];
+};
 
 export type UtilRow = {
   id: string;
   name: string;
   role: DeskRole;
-  engagements: number;
-  cycles: number;
-  reviews: number;
-  queries: number;
-  overdue: number;
-  dueSoon: number; // in-flight cycles with an SLA date within 5 business days
-  groups: UtilGroup[];
-  otherQueries: number; // queries they own that aren't on one of their engagements
-  points: number;
+  billable: number;
+  nonBillable: number;
+  total: number;
   capacity: number;
-  pct: number; // whole-number percentage; may exceed 100
+  capacityIsDefault: boolean;
+  pct: number; // billable / capacity, whole number; may exceed 100
   band: UtilBand;
+  entries: number;
+  clients: HoursLine[]; // busiest first
 };
 
 export type Utilization = {
-  rows: UtilRow[]; // sorted busiest first
-  summary: { people: number; avgPct: number; over: number; high: number; idle: number; overdue: number };
+  month: string;
+  rows: UtilRow[]; // busiest first
+  clients: HoursLine[]; // busiest first, across the visible people
+  summary: { people: number; billable: number; nonBillable: number; total: number; capacity: number; pct: number; over: number; idle: number };
 };
 
 type Person = { id: string; name: string | null; email: string; role: string };
 
-const wholeOrNull = (v: unknown): number | null => {
-  if (v === null || v === undefined || v === '') return null;
-  const n = Number(v);
-  return Number.isFinite(n) && n >= 0 ? n : null;
-};
+const INTERNAL = { key: 'internal', label: 'Internal', whiteLabel: false };
 
-/** Utilization for one person, from the data as loaded. */
-export function personUtilization(data: DeskData, person: Person, today = todayISO()): UtilRow {
-  const role = person.role as DeskRole;
-  const clientById = new Map((data.clients as Rec[]).map((c) => [c.id, c]));
-  const engagements = (data.engagements as Rec[]).filter(
-    (e) => (e.bookkeeper === person.id || e.controller === person.id) && ['Active', 'Pilot'].includes(e.status as string),
-  );
-  const cycles = data.cycles as Rec[];
-  const openQueries = (data.queries as Rec[]).filter((q) => q.owner === person.id && q.status !== 'Resolved');
+/** Which client bucket an entry belongs to. */
+function bucketFor(entry: TimeEntry, engById: Map<string, Rec>, clientById: Map<string, Rec>) {
+  if (!entry.engagement) return { ...INTERNAL, endClient: '' };
+  const e = engById.get(entry.engagement);
+  const c = e?.client ? clientById.get(e.client as string) : undefined;
+  if (!e || !c) return { key: 'unknown', label: (e?.name as string) || 'Unassigned engagement', whiteLabel: false, endClient: '' };
+  const whiteLabel = Boolean(c.whiteLabel);
+  return {
+    key: c.id as string,
+    label: (c.name as string) || 'Untitled client',
+    whiteLabel,
+    endClient: whiteLabel ? ((e.endClient as string) || (e.name as string) || 'Unnamed end client') : '',
+  };
+}
 
-  const lines: UtilLine[] = engagements.map((e) => {
-    const client = clientById.get(e.client) as Rec | undefined;
-    // The white-label flag lives on the client (Vincere); the underlying business is only named on the engagement.
-    const whiteLabel = Boolean(client?.whiteLabel);
-    const isBk = e.bookkeeper === person.id;
-    const isCtrl = e.controller === person.id;
-    const share = isCtrl && !isBk ? CONTROLLER_SHARE : 1;
-
-    const inFlight = cycles.filter((c) => c.engagement === e.id && !CYCLE_DONE.includes(c.stage as string) && c.stage !== 'Closed');
-    let reviews = 0;
-    for (const c of inFlight) {
-      for (const gate of pendingCycleReviews(c)) {
-        const owner = REVIEW_OWNER[gate];
-        if ((owner === 'accountant' && isBk) || (owner === 'controller' && isCtrl)) reviews++;
-      }
+/** Sum entries into client lines, busiest first, Internal last. */
+function rollUp(entries: TimeEntry[], data: DeskData): HoursLine[] {
+  const engById = new Map((data.engagements as Rec[]).map((e) => [e.id as string, e]));
+  const clientById = new Map((data.clients as Rec[]).map((c) => [c.id as string, c]));
+  const lines = new Map<string, HoursLine & { ends: Map<string, number>; users: Set<string> }>();
+  for (const t of entries) {
+    const b = bucketFor(t, engById, clientById);
+    let l = lines.get(b.key);
+    if (!l) {
+      l = { key: b.key, label: b.label, whiteLabel: b.whiteLabel, billable: 0, nonBillable: 0, total: 0, people: 0, endClients: [], ends: new Map(), users: new Set() };
+      lines.set(b.key, l);
     }
-    const overdue = inFlight.filter((c) => c.slaDue && c.slaStatus !== 'Met' && (c.slaDue as string) < today).length;
-    const cycleIds = new Set(cycles.filter((c) => c.engagement === e.id).map((c) => c.id));
-    const queries = openQueries.filter((q) => cycleIds.has(q.cycle)).length;
-
-    const explicit = wholeOrNull(e.capacity);
-    const baseline = explicit ?? (whiteLabel ? WHITE_LABEL_DEFAULT : WEIGHTS.engagement + inFlight.length * WEIGHTS.cycle);
-
-    return {
-      id: e.id as string,
-      name: (e.name as string) || 'Untitled',
-      client: ((client?.name as string) || '') as string,
-      endClient: whiteLabel ? (((e.endClient as string) || '') as string) : '',
-      whiteLabel,
-      capacity: explicit,
-      baseline,
-      usingDefault: explicit === null,
-      share,
-      cycles: inFlight.length,
-      reviews,
-      queries,
-      overdue,
-      points: baseline * share + reviews * WEIGHTS.review + queries * WEIGHTS.query + overdue * WEIGHTS.overdue,
-    };
-  });
-
-  // Queries they own that don't sit on one of their engagements still count.
-  const counted = new Set(lines.flatMap((l) => cycles.filter((c) => c.engagement === l.id).map((c) => c.id)));
-  const otherQueries = openQueries.filter((q) => !counted.has(q.cycle)).length;
-
-  // Group a white-label client's engagements under that client.
-  const groups: UtilGroup[] = [];
-  const byClient = new Map<string, UtilGroup>();
-  for (const l of lines) {
-    const e = engagements.find((x) => x.id === l.id) as Rec;
-    if (l.whiteLabel && e.client) {
-      const key = `wl:${e.client}`;
-      let g = byClient.get(key);
-      if (!g) {
-        g = { key, label: l.client || 'White-label client', whiteLabel: true, lines: [], points: 0 };
-        byClient.set(key, g);
-        groups.push(g);
-      }
-      g.lines.push(l);
-      g.points += l.points;
-    } else {
-      groups.push({ key: l.id, label: l.name, whiteLabel: false, lines: [l], points: l.points });
-    }
+    const billable = isBillable(t);
+    if (billable) l.billable += t.hours;
+    else l.nonBillable += t.hours;
+    l.total += t.hours;
+    l.users.add(t.user);
+    if (b.endClient) l.ends.set(b.endClient, (l.ends.get(b.endClient) ?? 0) + t.hours);
   }
-  groups.sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+  return [...lines.values()]
+    .map(({ ends, users, ...l }) => ({
+      ...l,
+      people: users.size,
+      endClients: [...ends.entries()].map(([label, total]) => ({ label, total })).sort((a, b) => b.total - a.total || a.label.localeCompare(b.label)),
+    }))
+    .sort((a, b) => Number(a.key === 'internal') - Number(b.key === 'internal') || b.total - a.total || a.label.localeCompare(b.label));
+}
 
-  const dueSoon = engagements.reduce((n, e) => {
-    return (
-      n +
-      cycles.filter((c) => {
-        if (c.engagement !== e.id || CYCLE_DONE.includes(c.stage as string) || c.stage === 'Closed') return false;
-        if (!c.slaDue || c.slaStatus === 'Met' || (c.slaDue as string) < today) return false;
-        return businessDays(today, c.slaDue as string) <= 5;
-      }).length
-    );
-  }, 0);
+/** Internal time is never billable, whatever the flag says. */
+export const isBillable = (t: TimeEntry): boolean => Boolean(t.engagement) && t.billable;
 
-  const points = lines.reduce((a, l) => a + l.points, 0) + otherQueries * WEIGHTS.query;
-  const capacity = CAPACITY[role] ?? CAPACITY.accountant;
-  const pct = Math.round((points / capacity) * 100);
+/** A person's capacity: their own monthly hours, else the role default. */
+export function capacityFor(role: DeskRole, monthlyHours: number | null | undefined): { capacity: number; isDefault: boolean } {
+  if (typeof monthlyHours === 'number' && Number.isFinite(monthlyHours) && monthlyHours > 0) return { capacity: monthlyHours, isDefault: false };
+  return { capacity: DEFAULT_MONTHLY_HOURS[role] ?? DEFAULT_MONTHLY_HOURS.accountant, isDefault: true };
+}
 
+/** One person's month, from entries already limited to that month. */
+export function personMonth(data: DeskData, person: Person, entries: TimeEntry[], monthlyHours: number | null | undefined): UtilRow {
+  const role = person.role as DeskRole;
+  const mine = entries.filter((t) => t.user === person.id);
+  const billable = mine.filter(isBillable).reduce((a, t) => a + t.hours, 0);
+  const total = mine.reduce((a, t) => a + t.hours, 0);
+  const { capacity, isDefault } = capacityFor(role, monthlyHours);
+  const pct = Math.round((billable / capacity) * 100);
   return {
     id: person.id,
     name: person.name || person.email,
     role,
-    engagements: lines.length,
-    cycles: lines.reduce((a, l) => a + l.cycles, 0),
-    reviews: lines.reduce((a, l) => a + l.reviews, 0),
-    queries: openQueries.length,
-    overdue: lines.reduce((a, l) => a + l.overdue, 0),
-    dueSoon,
-    groups,
-    otherQueries,
-    points,
+    billable,
+    nonBillable: total - billable,
+    total,
     capacity,
+    capacityIsDefault: isDefault,
     pct,
     band: utilBand(pct),
+    entries: mine.length,
+    clients: rollUp(mine, data),
   };
 }
 
@@ -238,25 +217,60 @@ export function visiblePeople(data: DeskData, viewer: { id: string; role: DeskRo
   return active.filter((u) => u.id === viewer.id);
 }
 
-/** The live report for a viewer. People with no assignments and no capacity
- * pressure are kept (so spare capacity is visible) except owner/management
- * with nothing assigned, who are not part of delivery. */
-export function utilization(data: DeskData, viewer: { id: string; role: DeskRole }, today = todayISO()): Utilization {
-  const rows = visiblePeople(data, viewer)
-    .map((p) => personUtilization(data, p, today))
-    .filter((r) => r.points > 0 || r.role === 'accountant' || r.role === 'controller' || r.id === viewer.id)
-    .sort((a, b) => b.pct - a.pct || a.name.localeCompare(b.name));
+/**
+ * The month's report for a viewer. `entries` may span more than the month;
+ * only those dated inside it count. Delivery staff (accountants, controllers)
+ * and the viewer always appear, so unused capacity is visible; owner and
+ * management appear only when they logged time.
+ */
+export function utilization(
+  data: DeskData,
+  viewer: { id: string; role: DeskRole },
+  month: string,
+  entries: TimeEntry[],
+  monthlyHours: Record<string, number | null>,
+): Utilization {
+  const { first, last } = monthRange(month);
+  const inMonth = entries.filter((t) => t.date >= first && t.date <= last);
+  const people = visiblePeople(data, viewer);
+  const visible = new Set(people.map((p) => p.id));
+  const seen = inMonth.filter((t) => visible.has(t.user));
 
-  const n = rows.length;
+  const rows = people
+    .map((p) => personMonth(data, p, seen, monthlyHours[p.id]))
+    .filter((r) => r.total > 0 || r.role === 'accountant' || r.role === 'controller' || r.id === viewer.id)
+    .sort((a, b) => b.pct - a.pct || b.total - a.total || a.name.localeCompare(b.name));
+
+  const shown = new Set(rows.map((r) => r.id));
+  const counted = seen.filter((t) => shown.has(t.user));
+  const clients = rollUp(counted, data);
+
+  const billable = rows.reduce((a, r) => a + r.billable, 0);
+  const total = rows.reduce((a, r) => a + r.total, 0);
+  const capacity = rows.reduce((a, r) => a + r.capacity, 0);
   return {
+    month,
     rows,
+    clients,
     summary: {
-      people: n,
-      avgPct: n ? Math.round(rows.reduce((a, r) => a + r.pct, 0) / n) : 0,
+      people: rows.length,
+      billable,
+      nonBillable: total - billable,
+      total,
+      capacity,
+      pct: capacity ? Math.round((billable / capacity) * 100) : 0,
       over: rows.filter((r) => r.band === 'over').length,
-      high: rows.filter((r) => r.band === 'high').length,
       idle: rows.filter((r) => r.band === 'idle').length,
-      overdue: rows.reduce((a, r) => a + r.overdue, 0),
     },
   };
+}
+
+/** Engagements a person can log time against: active or pilot, and for an
+ * accountant only the ones assigned to them (same scope as the boards). */
+export function loggableEngagements(data: DeskData, viewer: { id: string; role: DeskRole }): Rec[] {
+  return (data.engagements as Rec[]).filter(
+    (e) =>
+      ['Active', 'Pilot'].includes(e.status as string) &&
+      (viewer.role !== 'accountant' || e.bookkeeper === viewer.id || e.controller === viewer.id),
+  );
 }

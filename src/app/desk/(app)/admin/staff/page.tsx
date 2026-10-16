@@ -26,6 +26,7 @@ export default async function AdminStaffPage() {
         isActive: u.isActive,
         lastLoginAt: u.lastLoginAt?.toISOString() ?? null,
         hasPassword: !!u.passwordHash,
+        monthlyHours: u.monthlyHours,
       }))}
       invites={invites.map((i) => ({
         id: i.id,

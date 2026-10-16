@@ -145,3 +145,30 @@ export async function setUserActive(input: { userId: string; active: boolean }):
   revalidatePath('/desk/admin/staff');
   return { ok: true };
 }
+
+/** Monthly capacity in hours for the utilization view. null = role default. */
+export async function setMonthlyHours(input: { userId: string; hours: number | null }): Promise<Result> {
+  let me;
+  try {
+    me = await requireOwner();
+  } catch {
+    return { ok: false, error: 'Only the owner can set capacity.' };
+  }
+  const hours = input.hours;
+  if (hours !== null && (!Number.isInteger(hours) || hours < 1 || hours > 400)) {
+    return { ok: false, error: 'Enter whole hours between 1 and 400, or leave blank for the role default.' };
+  }
+  const target = await prisma.deskUser.findUnique({ where: { id: input.userId } });
+  if (!target) return { ok: false, error: 'User not found.' };
+  await prisma.deskUser.update({ where: { id: input.userId }, data: { monthlyHours: hours } });
+  await recordDeskAudit({
+    action: 'capacity_changed',
+    actorId: me.id,
+    actorEmail: me.email,
+    recordId: input.userId,
+    summary: `${target.email}: ${target.monthlyHours ?? 'default'} → ${hours ?? 'default'} h/month`,
+  });
+  revalidatePath('/desk/admin/staff');
+  revalidatePath('/desk/utilization');
+  return { ok: true };
+}

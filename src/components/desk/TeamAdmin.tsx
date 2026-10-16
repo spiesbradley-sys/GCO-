@@ -9,9 +9,10 @@ import { Pill } from '@/components/ui/Badge';
 import { useToast } from '@/components/ui/Toast';
 import { fmtDate } from '@/desk/format';
 import { DESK_ROLE_LABEL, type DeskRole } from '@/desk/roles';
-import { inviteUser, resendInvite, revokeInvite, changeRole, setUserActive } from '@/desk/actions/team';
+import { inviteUser, resendInvite, revokeInvite, changeRole, setUserActive, setMonthlyHours } from '@/desk/actions/team';
+import { DEFAULT_MONTHLY_HOURS } from '@/desk/utilization';
 
-type UserRow = { id: string; name: string | null; email: string; role: DeskRole; isActive: boolean; lastLoginAt: string | null; hasPassword: boolean };
+type UserRow = { id: string; name: string | null; email: string; role: DeskRole; isActive: boolean; lastLoginAt: string | null; hasPassword: boolean; monthlyHours: number | null };
 type InviteRow = { id: string; email: string; role: DeskRole; invitedByEmail: string; expiresAt: string; createdAt: string };
 
 export function TeamAdmin({ me, users, invites }: { me: string; users: UserRow[]; invites: InviteRow[] }) {
@@ -90,7 +91,7 @@ export function TeamAdmin({ me, users, invites }: { me: string; users: UserRow[]
           <table className="w-full text-[14px]">
             <thead>
               <tr className="bg-surface-sunken text-left text-[12px] uppercase tracking-header text-ink-tertiary">
-                <th className="px-3 py-2">Person</th><th className="px-3 py-2">Role</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Last login</th><th className="px-3 py-2 text-right">Actions</th>
+                <th className="px-3 py-2">Person</th><th className="px-3 py-2">Role</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Last login</th><th className="px-3 py-2 text-right">Hours / month</th><th className="px-3 py-2 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -119,6 +120,26 @@ export function TeamAdmin({ me, users, invites }: { me: string; users: UserRow[]
                     )}
                   </td>
                   <td className="px-3 py-2 text-[13px] text-ink-secondary">{u.lastLoginAt ? fmtDate(u.lastLoginAt.slice(0, 10)) : '—'}</td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      max={400}
+                      step={1}
+                      defaultValue={u.monthlyHours ?? ''}
+                      placeholder={String(DEFAULT_MONTHLY_HOURS[u.role])}
+                      aria-label={`Monthly capacity in hours for ${u.name ?? u.email}. Blank uses the ${DESK_ROLE_LABEL[u.role].toLowerCase()} default of ${DEFAULT_MONTHLY_HOURS[u.role]}.`}
+                      title={`Blank = ${DESK_ROLE_LABEL[u.role].toLowerCase()} default (${DEFAULT_MONTHLY_HOURS[u.role]} h)`}
+                      onBlur={(e) => {
+                        const raw = e.target.value.trim();
+                        const next = raw === '' ? null : Number(raw);
+                        if (next === u.monthlyHours) return;
+                        act(() => setMonthlyHours({ userId: u.id, hours: next }), 'Capacity saved.');
+                      }}
+                      className="h-8 w-20 rounded-input border border-border-default bg-surface-card px-2 text-right text-[13px] tnum text-ink placeholder:text-ink-tertiary focus:border-accent-secondary focus:outline-none"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-right">
                     {u.id !== me && (
                       <Button size="sm" variant="ghost" onClick={() => act(() => setUserActive({ userId: u.id, active: !u.isActive }), u.isActive ? 'Deactivated.' : 'Reactivated.')}>
